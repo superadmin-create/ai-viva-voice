@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRoute, Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,12 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Mic, MicOff, Volume2, CheckCircle2, User, Mail, Phone, ArrowLeft } from "lucide-react";
+import { Loader2, Mic, Volume2, CheckCircle2, User, Mail, Phone, ArrowLeft } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-type Question = {
-  text: string;
+type TranscriptItem = {
+  question: string;
   answer: string;
   feedback: string;
   score: number;
@@ -28,19 +28,20 @@ export default function VivaPage() {
   const [, params] = useRoute("/:subject");
   const subject = params?.subject || "";
 
-  const [step, setStep] = useState<"register" | "exam" | "completed">("register");
+  const [step, setStep] = useState<"register" | "preparing" | "exam" | "submitting" | "completed">("register");
   const [studentInfo, setStudentInfo] = useState({ name: "", email: "", phone: "" });
   
   const [questions, setQuestions] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [transcript, setTranscript] = useState<Question[]>([]);
+  const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [isListening, setIsListening] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const autoListenRef = useRef<boolean>(false);
 
   const { data: subjectInfo } = useQuery<SubjectInfo>({
     queryKey: ["subject", subject],
@@ -88,39 +89,69 @@ export default function VivaPage() {
     },
   });
 
+  // Initialize speech recognition
   useEffect(() => {
     if ('webkitSpeechRecognition' in window) {
       const SpeechRecognition = (window as any).webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
 
       recognitionRef.current.onresult = (event: any) => {
-        const text = event.results[0][0].transcript;
-        setCurrentAnswer((prev) => prev + " " + text);
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript + ' ';
+          }
+        }
+        if (finalTranscript) {
+          setCurrentAnswer(prev => (prev + ' ' + finalTranscript).trim());
+        }
       };
 
       recognitionRef.current.onend = () => {
         setIsListening(false);
+        // Auto-restart if we want to keep listening
+        if (autoListenRef.current && recognitionRef.current) {
+          try {
+            recognitionRef.current.start();
+            setIsListening(true);
+          } catch (e) {
+            console.log("Could not restart recognition");
+          }
+        }
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error);
+        if (event.error !== 'no-speech') {
+          setIsListening(false);
+        }
       };
     }
   }, []);
 
-  const startListening = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.start();
-      setIsListening(true);
+  const startListening = useCallback(() => {
+    if (recognitionRef.current && !isListening) {
+      try {
+        autoListenRef.current = true;
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (e) {
+        console.log("Recognition already started");
+      }
     }
-  };
+  }, [isListening]);
 
-  const stopListening = () => {
+  const stopListening = useCallback(() => {
+    autoListenRef.current = false;
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       setIsListening(false);
     }
-  };
+  }, []);
 
-  const speakQuestion = async (text: string) => {
+  const speakText = useCallback(async (text: string, onComplete?: () => void) => {
     setIsSpeaking(true);
     try {
       const response = await fetch("/api/viva/text-to-speech", {
@@ -136,17 +167,19 @@ export default function VivaPage() {
       
       if (audioRef.current) {
         audioRef.current.src = audioUrl;
-        audioRef.current.play();
         audioRef.current.onended = () => {
           setIsSpeaking(false);
           URL.revokeObjectURL(audioUrl);
+          if (onComplete) onComplete();
         };
+        await audioRef.current.play();
       }
     } catch (error) {
       console.error("TTS error:", error);
       setIsSpeaking(false);
+      if (onComplete) onComplete();
     }
-  };
+  }, []);
 
   const startExam = async () => {
     if (!studentInfo.name || !studentInfo.email || !studentInfo.phone) {
@@ -154,13 +187,25 @@ export default function VivaPage() {
       return;
     }
 
-    setStep("exam");
+    setStep("preparing");
+    
+    // Generate questions
     const result = await generateQuestionsMutation.mutateAsync(subject);
     setQuestions(result.questions);
     
-    if (result.questions.length > 0) {
-      await speakQuestion(result.questions[0]);
-    }
+    setStep("exam");
+
+    // Greet student and ask first question
+    const greeting = `Hello ${studentInfo.name}! Welcome to your ${subjectInfo?.name || subject} examination. I will ask you ${result.questions.length} questions. Please answer each question clearly. Let's begin.`;
+    
+    await speakText(greeting, () => {
+      if (result.questions.length > 0) {
+        speakText(`Question 1: ${result.questions[0]}`, () => {
+          // Auto-start listening after question is asked
+          startListening();
+        });
+      }
+    });
   };
 
   const submitAnswer = async () => {
@@ -169,50 +214,61 @@ export default function VivaPage() {
       return;
     }
 
-    setIsProcessing(true);
+    stopListening();
+    setIsEvaluating(true);
 
-    const evaluation = await evaluateAnswerMutation.mutateAsync({
-      question: questions[currentQuestionIndex],
-      answer: currentAnswer,
-    });
-
-    const newTranscriptItem = {
-      text: questions[currentQuestionIndex],
-      answer: currentAnswer,
-      feedback: evaluation.feedback,
-      score: evaluation.score,
-    };
-
-    const updatedTranscript = [...transcript, newTranscriptItem];
-    setTranscript(updatedTranscript);
-
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setCurrentAnswer("");
-      setIsProcessing(false);
-      await speakQuestion(questions[currentQuestionIndex + 1]);
-    } else {
-      const totalScore = updatedTranscript.reduce((sum, t) => sum + t.score, 0);
-
-      await submitResultsMutation.mutateAsync({
-        studentName: studentInfo.name,
-        studentEmail: studentInfo.email,
-        studentPhone: studentInfo.phone,
-        subject,
-        score: totalScore,
-        maxScore: questions.length * 10,
-        transcript: updatedTranscript.map(t => ({
-          question: t.text,
-          answer: t.answer,
-          feedback: t.feedback,
-          score: t.score,
-        })),
-        status: "completed",
-        sheetSynced: "pending",
+    try {
+      const evaluation = await evaluateAnswerMutation.mutateAsync({
+        question: questions[currentQuestionIndex],
+        answer: currentAnswer,
       });
 
-      setStep("completed");
-      setIsProcessing(false);
+      const newTranscriptItem: TranscriptItem = {
+        question: questions[currentQuestionIndex],
+        answer: currentAnswer,
+        feedback: evaluation.feedback,
+        score: evaluation.score,
+      };
+
+      const updatedTranscript = [...transcript, newTranscriptItem];
+      setTranscript(updatedTranscript);
+      setCurrentAnswer("");
+
+      if (currentQuestionIndex < questions.length - 1) {
+        // Move to next question immediately
+        const nextIndex = currentQuestionIndex + 1;
+        setCurrentQuestionIndex(nextIndex);
+        setIsEvaluating(false);
+        
+        // Speak next question and auto-listen
+        speakText(`Question ${nextIndex + 1}: ${questions[nextIndex]}`, () => {
+          startListening();
+        });
+      } else {
+        // Final submission
+        setStep("submitting");
+        const totalScore = updatedTranscript.reduce((sum, t) => sum + t.score, 0);
+
+        await submitResultsMutation.mutateAsync({
+          studentName: studentInfo.name,
+          studentEmail: studentInfo.email,
+          studentPhone: studentInfo.phone,
+          subject,
+          score: totalScore,
+          maxScore: questions.length * 10,
+          transcript: updatedTranscript,
+          status: "completed",
+          sheetSynced: "pending",
+        });
+
+        setStep("completed");
+        setIsEvaluating(false);
+      }
+    } catch (error) {
+      console.error("Error submitting answer:", error);
+      toast.error("Failed to evaluate answer. Please try again.");
+      setIsEvaluating(false);
+      startListening();
     }
   };
 
@@ -299,15 +355,26 @@ export default function VivaPage() {
               disabled={generateQuestionsMutation.isPending}
               data-testid="button-start-exam"
             >
-              {generateQuestionsMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Preparing Exam...
-                </>
-              ) : (
-                "Start Examination"
-              )}
+              Start Examination
             </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              The AI will ask questions via voice. Make sure your microphone is enabled.
+            </p>
+          </CardContent>
+        </Card>
+        <audio ref={audioRef} hidden />
+      </div>
+    );
+  }
+
+  if (step === "preparing") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-slate-50 flex items-center justify-center p-6">
+        <Card className="w-full max-w-lg border-2 shadow-2xl">
+          <CardContent className="py-12 text-center">
+            <Loader2 className="h-12 w-12 animate-spin mx-auto text-violet-600 mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Preparing Your Examination</h2>
+            <p className="text-muted-foreground">Generating questions for {displaySubjectName}...</p>
           </CardContent>
         </Card>
         <audio ref={audioRef} hidden />
@@ -320,77 +387,92 @@ export default function VivaPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-slate-50 p-6">
         <div className="container mx-auto max-w-4xl">
           <div className="mb-6">
-            <Progress value={((currentQuestionIndex + 1) / questions.length) * 100} className="h-2" data-testid="progress-exam" />
-            <p className="text-center mt-2 text-sm text-muted-foreground" data-testid="text-question-progress">
+            <Progress value={((currentQuestionIndex + 1) / questions.length) * 100} className="h-3" data-testid="progress-exam" />
+            <p className="text-center mt-2 text-muted-foreground" data-testid="text-question-progress">
               Question {currentQuestionIndex + 1} of {questions.length}
             </p>
           </div>
 
           <Card className="border-2 shadow-2xl" data-testid="card-question">
             <CardHeader>
-              <CardTitle className="text-2xl flex items-center gap-3">
-                <Volume2 className={isSpeaking ? "animate-pulse text-violet-600" : "text-muted-foreground"} />
-                <span data-testid="text-current-question">{questions[currentQuestionIndex]}</span>
-              </CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => speakQuestion(questions[currentQuestionIndex])}
-                disabled={isSpeaking}
-                className="mt-2 w-fit"
-                data-testid="button-replay"
-              >
-                <Volume2 className="h-4 w-4 mr-2" />
-                Replay Question
-              </Button>
+              <div className="flex items-center gap-3">
+                <div className={`p-3 rounded-full ${isSpeaking ? 'bg-violet-100 animate-pulse' : 'bg-slate-100'}`}>
+                  <Volume2 className={`h-6 w-6 ${isSpeaking ? 'text-violet-600' : 'text-muted-foreground'}`} />
+                </div>
+                <CardTitle className="text-xl" data-testid="text-current-question">
+                  {questions[currentQuestionIndex]}
+                </CardTitle>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <Label htmlFor="answer">Your Answer</Label>
-                <div className="relative mt-2">
-                  <Textarea
-                    id="answer"
-                    value={currentAnswer}
-                    onChange={(e) => setCurrentAnswer(e.target.value)}
-                    placeholder="Type or speak your answer..."
-                    className="min-h-[120px] pr-12"
-                    data-testid="input-answer"
-                  />
-                  <Button
-                    size="icon"
-                    variant={isListening ? "default" : "outline"}
-                    className="absolute right-2 top-2"
-                    onClick={isListening ? stopListening : startListening}
-                    data-testid="button-voice"
-                  >
-                    {isListening ? <Mic className="h-4 w-4 animate-pulse" /> : <MicOff className="h-4 w-4" />}
-                  </Button>
+                <div className="flex items-center justify-between mb-2">
+                  <Label htmlFor="answer">Your Answer</Label>
+                  <div className="flex items-center gap-2">
+                    {isListening && (
+                      <Badge variant="default" className="bg-red-500 animate-pulse">
+                        <Mic className="h-3 w-3 mr-1" />
+                        Listening...
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                {isListening && (
-                  <p className="text-sm text-violet-600 mt-2 animate-pulse">Listening... Speak now</p>
-                )}
+                <Textarea
+                  id="answer"
+                  value={currentAnswer}
+                  onChange={(e) => setCurrentAnswer(e.target.value)}
+                  placeholder="Speak your answer or type here..."
+                  className="min-h-[150px] text-lg"
+                  data-testid="input-answer"
+                />
               </div>
 
-              <Button
-                onClick={submitAnswer}
-                disabled={isProcessing || !currentAnswer.trim()}
-                className="w-full h-12 text-lg bg-violet-600 hover:bg-violet-700"
-                data-testid="button-submit-answer"
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Evaluating...
-                  </>
-                ) : currentQuestionIndex < questions.length - 1 ? (
-                  "Next Question"
-                ) : (
-                  "Submit Examination"
-                )}
-              </Button>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={isListening ? stopListening : startListening}
+                  className={isListening ? 'border-red-500 text-red-500' : ''}
+                  data-testid="button-voice"
+                >
+                  <Mic className={`h-4 w-4 mr-2 ${isListening ? 'animate-pulse' : ''}`} />
+                  {isListening ? 'Stop Listening' : 'Start Listening'}
+                </Button>
+                <Button
+                  onClick={submitAnswer}
+                  disabled={isEvaluating || !currentAnswer.trim()}
+                  className="flex-1 h-12 text-lg bg-violet-600 hover:bg-violet-700"
+                  data-testid="button-submit-answer"
+                >
+                  {isEvaluating ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Evaluating...
+                    </>
+                  ) : currentQuestionIndex < questions.length - 1 ? (
+                    "Submit & Next Question"
+                  ) : (
+                    "Submit Final Answer"
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
+        <audio ref={audioRef} hidden />
+      </div>
+    );
+  }
+
+  if (step === "submitting") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-slate-50 flex items-center justify-center p-6">
+        <Card className="w-full max-w-lg border-2 shadow-2xl">
+          <CardContent className="py-12 text-center">
+            <Loader2 className="h-12 w-12 animate-spin mx-auto text-violet-600 mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Submitting Results</h2>
+            <p className="text-muted-foreground">Saving your examination to records...</p>
+          </CardContent>
+        </Card>
         <audio ref={audioRef} hidden />
       </div>
     );
@@ -423,7 +505,6 @@ export default function VivaPage() {
               <Link href="/">
                 <Button
                   variant="outline"
-                  className="mr-4"
                   data-testid="button-home"
                 >
                   <ArrowLeft className="h-4 w-4 mr-2" />

@@ -1,9 +1,9 @@
 import type { Express } from "express";
 import { type Server } from "http";
 import { storage } from "./storage";
-import { insertVivaResultSchema } from "@shared/schema";
+import { insertVivaResultSchema, insertSubjectSchema, insertManualQuestionSchema } from "@shared/schema";
 import { generateVivaQuestions, evaluateAnswer, textToSpeech } from "./lib/openai-service";
-import { syncVivaResultToSheet, createVivaResultsSheet } from "./lib/google-sheets-service";
+import { syncVivaResultToSheet } from "./lib/google-sheets-service";
 import { getAllSubjects, getSubjectContent } from "./lib/subject-content";
 import { z } from "zod";
 
@@ -12,11 +12,24 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
-  // Get list of available subjects
+  // Get list of available subjects (combines built-in and custom)
   app.get("/api/subjects", async (req, res) => {
     try {
-      const subjects = getAllSubjects();
-      res.json(subjects.map(s => ({ name: s.name, slug: s.slug })));
+      const builtInSubjects = getAllSubjects().map(s => ({ 
+        name: s.name, 
+        slug: s.slug,
+        isBuiltIn: true 
+      }));
+      
+      const customSubjects = await storage.getSubjects();
+      const customFormatted = customSubjects.map(s => ({
+        id: s.id,
+        name: s.name,
+        slug: s.slug,
+        isBuiltIn: false
+      }));
+      
+      res.json([...builtInSubjects, ...customFormatted]);
     } catch (error: any) {
       console.error("Error fetching subjects:", error);
       res.status(500).json({ error: error.message || "Failed to fetch subjects" });
@@ -26,14 +39,116 @@ export async function registerRoutes(
   // Get subject details
   app.get("/api/subjects/:slug", async (req, res) => {
     try {
-      const subject = getSubjectContent(req.params.slug);
+      // Check built-in first
+      const builtIn = getSubjectContent(req.params.slug);
+      if (builtIn) {
+        return res.json({ ...builtIn, isBuiltIn: true });
+      }
+      
+      // Check custom subjects
+      const custom = await storage.getSubjectBySlug(req.params.slug);
+      if (custom) {
+        return res.json({ 
+          name: custom.name, 
+          slug: custom.slug, 
+          modules: custom.curriculum,
+          isBuiltIn: false 
+        });
+      }
+      
+      res.status(404).json({ error: "Subject not found" });
+    } catch (error: any) {
+      console.error("Error fetching subject:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch subject" });
+    }
+  });
+
+  // Create a new custom subject
+  app.post("/api/admin/subjects", async (req, res) => {
+    try {
+      const validatedData = insertSubjectSchema.parse(req.body);
+      const subject = await storage.createSubject(validatedData);
+      res.json(subject);
+    } catch (error: any) {
+      console.error("Error creating subject:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ error: "Invalid data format", details: error.errors });
+      }
+      res.status(500).json({ error: error.message || "Failed to create subject" });
+    }
+  });
+
+  // Update a custom subject
+  app.put("/api/admin/subjects/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+      const subject = await storage.updateSubject(id, req.body);
       if (!subject) {
         return res.status(404).json({ error: "Subject not found" });
       }
       res.json(subject);
     } catch (error: any) {
-      console.error("Error fetching subject:", error);
-      res.status(500).json({ error: error.message || "Failed to fetch subject" });
+      console.error("Error updating subject:", error);
+      res.status(500).json({ error: error.message || "Failed to update subject" });
+    }
+  });
+
+  // Delete a custom subject
+  app.delete("/api/admin/subjects/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+      await storage.deleteSubject(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting subject:", error);
+      res.status(500).json({ error: error.message || "Failed to delete subject" });
+    }
+  });
+
+  // Get manual questions for a subject
+  app.get("/api/admin/subjects/:slug/questions", async (req, res) => {
+    try {
+      const questions = await storage.getManualQuestionsBySubject(req.params.slug);
+      res.json(questions);
+    } catch (error: any) {
+      console.error("Error fetching questions:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch questions" });
+    }
+  });
+
+  // Add a manual question
+  app.post("/api/admin/questions", async (req, res) => {
+    try {
+      const validatedData = insertManualQuestionSchema.parse(req.body);
+      const question = await storage.createManualQuestion(validatedData);
+      res.json(question);
+    } catch (error: any) {
+      console.error("Error creating question:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ error: "Invalid data format", details: error.errors });
+      }
+      res.status(500).json({ error: error.message || "Failed to create question" });
+    }
+  });
+
+  // Delete a manual question
+  app.delete("/api/admin/questions/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+      await storage.deleteManualQuestion(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting question:", error);
+      res.status(500).json({ error: error.message || "Failed to delete question" });
     }
   });
 
@@ -46,6 +161,22 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Subject is required" });
       }
 
+      // First check for manual questions
+      const manualQuestions = await storage.getManualQuestionsBySubject(subject);
+      
+      if (manualQuestions.length >= (count || 5)) {
+        // Use manual questions only
+        const questions = manualQuestions.slice(0, count || 5).map(q => q.questionText);
+        return res.json({ questions });
+      } else if (manualQuestions.length > 0) {
+        // Mix manual and AI questions
+        const manualTexts = manualQuestions.map(q => q.questionText);
+        const aiCount = (count || 5) - manualQuestions.length;
+        const aiQuestions = await generateVivaQuestions(subject, aiCount);
+        return res.json({ questions: [...manualTexts, ...aiQuestions] });
+      }
+
+      // All AI questions
       const questions = await generateVivaQuestions(subject, count || 5);
       res.json({ questions });
     } catch (error: any) {
@@ -163,20 +294,6 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error fetching results by subject:", error);
       res.status(500).json({ error: error.message || "Failed to fetch results" });
-    }
-  });
-
-  // Create a new Google Sheet for results (admin utility)
-  app.post("/api/admin/create-sheet", async (req, res) => {
-    try {
-      const spreadsheetId = await createVivaResultsSheet();
-      res.json({ 
-        spreadsheetId,
-        message: "Spreadsheet created successfully. Set GOOGLE_SHEET_ID environment variable to use it."
-      });
-    } catch (error: any) {
-      console.error("Error creating sheet:", error);
-      res.status(500).json({ error: error.message || "Failed to create sheet" });
     }
   });
 

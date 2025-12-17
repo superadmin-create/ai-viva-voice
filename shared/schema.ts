@@ -43,3 +43,39 @@ export const insertVivaResultSchema = createInsertSchema(vivaResults).omit({
 
 export type InsertVivaResult = z.infer<typeof insertVivaResultSchema>;
 export type VivaResult = typeof vivaResults.$inferSelect;
+
+// Custom subjects table
+export const subjects = pgTable("subjects", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  curriculum: jsonb("curriculum").notNull().$type<Array<{
+    title: string;
+    topics: string[];
+  }>>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSubjectSchema = createInsertSchema(subjects).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertSubject = z.infer<typeof insertSubjectSchema>;
+export type Subject = typeof subjects.$inferSelect;
+
+// Manual questions table
+export const manualQuestions = pgTable("manual_questions", {
+  id: serial("id").primaryKey(),
+  subjectSlug: text("subject_slug").notNull(),
+  questionText: text("question_text").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertManualQuestionSchema = createInsertSchema(manualQuestions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertManualQuestion = z.infer<typeof insertManualQuestionSchema>;
+export type ManualQuestion = typeof manualQuestions.$inferSelect;

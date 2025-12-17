@@ -38,9 +38,6 @@ async function getAccessToken() {
   return accessToken;
 }
 
-// WARNING: Never cache this client.
-// Access tokens expire, so a new client must be created each time.
-// Always call this function again to get a fresh client.
 async function getUncachableGoogleSheetClient() {
   const accessToken = await getAccessToken();
 
@@ -52,147 +49,140 @@ async function getUncachableGoogleSheetClient() {
   return google.sheets({ version: 'v4', auth: oauth2Client });
 }
 
-const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID || '';
+async function getGoogleDriveClient() {
+  const accessToken = await getAccessToken();
 
-export async function syncVivaResultToSheet(result: VivaResult): Promise<void> {
-  if (!SPREADSHEET_ID) {
-    console.warn('GOOGLE_SHEET_ID not set, skipping Google Sheets sync');
-    return;
+  const oauth2Client = new google.auth.OAuth2();
+  oauth2Client.setCredentials({
+    access_token: accessToken
+  });
+
+  return google.drive({ version: 'v3', auth: oauth2Client });
+}
+
+// Sheet name where all viva results are stored
+export const VIVA_RESULTS_SHEET_NAME = "Viva Results";
+
+// Get or create the viva results spreadsheet
+async function getOrCreateSpreadsheet(): Promise<string> {
+  const sheets = await getUncachableGoogleSheetClient();
+  const drive = await getGoogleDriveClient();
+  
+  // Search for existing spreadsheet named "AI Viva Results"
+  const searchResponse = await drive.files.list({
+    q: "name='AI Viva Results' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
+    fields: 'files(id, name)',
+    spaces: 'drive'
+  });
+
+  if (searchResponse.data.files && searchResponse.data.files.length > 0) {
+    const spreadsheetId = searchResponse.data.files[0].id!;
+    console.log(`Found existing spreadsheet: ${spreadsheetId}`);
+    return spreadsheetId;
   }
 
+  // Create new spreadsheet
+  const createResponse = await sheets.spreadsheets.create({
+    requestBody: {
+      properties: {
+        title: 'AI Viva Results'
+      },
+      sheets: [{
+        properties: {
+          title: VIVA_RESULTS_SHEET_NAME
+        }
+      }]
+    }
+  });
+
+  const spreadsheetId = createResponse.data.spreadsheetId!;
+  console.log(`Created new spreadsheet: ${spreadsheetId}`);
+
+  // Add headers
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${VIVA_RESULTS_SHEET_NAME}!A1:P1`,
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [[
+        'ID',
+        'Date & Time',
+        'Student Name',
+        'Email',
+        'Phone',
+        'Subject',
+        'Total Score',
+        'Max Score',
+        'Percentage',
+        'Grade',
+        'Status',
+        'Q1', 'A1', 'F1', 'S1',
+        'Q2', 'A2', 'F2', 'S2',
+        'Q3', 'A3', 'F3', 'S3',
+        'Q4', 'A4', 'F4', 'S4',
+        'Q5', 'A5', 'F5', 'S5'
+      ]]
+    }
+  });
+
+  return spreadsheetId;
+}
+
+function calculateGrade(percentage: number): string {
+  if (percentage >= 90) return 'A+';
+  if (percentage >= 80) return 'A';
+  if (percentage >= 70) return 'B';
+  if (percentage >= 60) return 'C';
+  if (percentage >= 50) return 'D';
+  return 'F';
+}
+
+export async function syncVivaResultToSheet(result: VivaResult): Promise<void> {
   try {
+    const spreadsheetId = await getOrCreateSpreadsheet();
     const sheets = await getUncachableGoogleSheetClient();
 
-    // Check if the sheet exists, if not create headers
-    try {
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Viva Results!A1:A1',
-      });
+    const percentage = (result.score / result.maxScore) * 100;
+    const grade = calculateGrade(percentage);
 
-      // If sheet doesn't have headers, add them
-      if (!response.data.values || response.data.values.length === 0) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SPREADSHEET_ID,
-          range: 'Viva Results!A1:M1',
-          valueInputOption: 'RAW',
-          requestBody: {
-            values: [[
-              'ID',
-              'Student Name',
-              'Email',
-              'Phone',
-              'Subject',
-              'Score',
-              'Max Score',
-              'Percentage',
-              'Date',
-              'Status',
-              'Questions',
-              'Answers',
-              'Feedback'
-            ]]
-          }
-        });
-      }
-    } catch (error) {
-      // Sheet might not exist, headers will be added in the append call
-      console.log('Sheet not found or empty, will create headers');
-    }
-
-    // Prepare the row data
-    const percentage = ((result.score / result.maxScore) * 100).toFixed(2);
-    const questions = result.transcript.map(t => t.question).join(' | ');
-    const answers = result.transcript.map(t => t.answer).join(' | ');
-    const feedbacks = result.transcript.map(t => t.feedback).join(' | ');
-
-    const rowData = [
+    // Build row with Q&A pairs
+    const rowData: (string | number)[] = [
       result.id.toString(),
+      new Date(result.timestamp).toLocaleString(),
       result.studentName,
       result.studentEmail,
       result.studentPhone,
       result.subject,
-      result.score.toString(),
-      result.maxScore.toString(),
-      `${percentage}%`,
-      new Date(result.timestamp).toLocaleString(),
-      result.status,
-      questions,
-      answers,
-      feedbacks
+      result.score,
+      result.maxScore,
+      `${percentage.toFixed(1)}%`,
+      grade,
+      result.status
     ];
 
-    // Append the data to the sheet
+    // Add Q&A pairs (up to 5 questions)
+    for (let i = 0; i < 5; i++) {
+      if (result.transcript[i]) {
+        const t = result.transcript[i];
+        rowData.push(t.question, t.answer, t.feedback, t.score.toString());
+      } else {
+        rowData.push('', '', '', '');
+      }
+    }
+
+    // Append the row
     await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'Viva Results!A:M',
+      spreadsheetId,
+      range: `${VIVA_RESULTS_SHEET_NAME}!A:Z`,
       valueInputOption: 'RAW',
       requestBody: {
         values: [rowData]
       }
     });
 
-    console.log(`Successfully synced viva result ${result.id} to Google Sheets`);
+    console.log(`Synced viva result ${result.id} to Google Sheet: AI Viva Results`);
   } catch (error: any) {
     console.error('Error syncing to Google Sheets:', error.message);
-    throw error;
-  }
-}
-
-export async function createVivaResultsSheet(): Promise<string> {
-  try {
-    const sheets = await getUncachableGoogleSheetClient();
-
-    // Create a new spreadsheet
-    const response = await sheets.spreadsheets.create({
-      requestBody: {
-        properties: {
-          title: 'AI Viva Results'
-        },
-        sheets: [{
-          properties: {
-            title: 'Viva Results'
-          }
-        }]
-      }
-    });
-
-    const spreadsheetId = response.data.spreadsheetId;
-    
-    if (!spreadsheetId) {
-      throw new Error('Failed to create spreadsheet');
-    }
-
-    // Add headers
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: 'Viva Results!A1:M1',
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: [[
-          'ID',
-          'Student Name',
-          'Email',
-          'Phone',
-          'Subject',
-          'Score',
-          'Max Score',
-          'Percentage',
-          'Date',
-          'Status',
-          'Questions',
-          'Answers',
-          'Feedback'
-        ]]
-      }
-    });
-
-    console.log(`Created new spreadsheet with ID: ${spreadsheetId}`);
-    console.log(`Set GOOGLE_SHEET_ID environment variable to: ${spreadsheetId}`);
-    
-    return spreadsheetId;
-  } catch (error: any) {
-    console.error('Error creating spreadsheet:', error.message);
     throw error;
   }
 }
