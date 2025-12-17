@@ -32,7 +32,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createVivaResult(result: InsertVivaResult): Promise<VivaResult> {
-    const inserted = await db.insert(vivaResults).values([result]).returning();
+    const inserted = await db.insert(vivaResults).values([result as any]).returning();
     return inserted[0];
   }
 
