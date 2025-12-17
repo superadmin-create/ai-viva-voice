@@ -1,11 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2 } from "lucide-react";
+import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, FileSpreadsheet } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 type VivaResult = {
   id: number;
@@ -29,12 +31,33 @@ type VivaResult = {
 export default function AdminPanel() {
   const [selectedResult, setSelectedResult] = useState<VivaResult | null>(null);
 
-  const { data: results, isLoading } = useQuery<VivaResult[]>({
+  const { data: results, isLoading, refetch } = useQuery<VivaResult[]>({
     queryKey: ["admin-results"],
     queryFn: async () => {
       const response = await fetch("/api/admin/results");
       if (!response.ok) throw new Error("Failed to fetch results");
       return response.json();
+    },
+  });
+
+  const createSheetMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/admin/create-sheet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!response.ok) throw new Error("Failed to create sheet");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success("Google Sheet created successfully!", {
+        description: `Spreadsheet ID: ${data.spreadsheetId}. Set GOOGLE_SHEET_ID env variable to enable auto-sync.`,
+      });
+    },
+    onError: (error: any) => {
+      toast.error("Failed to create Google Sheet", {
+        description: error.message,
+      });
     },
   });
 
@@ -49,11 +72,31 @@ export default function AdminPanel() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-slate-50">
       <div className="container mx-auto p-6 max-w-7xl">
-        <div className="mb-8">
-          <h1 className="text-5xl font-bold mb-2 bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent" data-testid="heading-admin">
-            Admin Dashboard
-          </h1>
-          <p className="text-muted-foreground text-lg">Monitor and review all viva voce examinations</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-5xl font-bold mb-2 bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent" data-testid="heading-admin">
+              Admin Dashboard
+            </h1>
+            <p className="text-muted-foreground text-lg">Monitor and review all viva voce examinations</p>
+          </div>
+          <Button
+            onClick={() => createSheetMutation.mutate()}
+            disabled={createSheetMutation.isPending}
+            className="bg-green-600 hover:bg-green-700"
+            data-testid="button-create-sheet"
+          >
+            {createSheetMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Create Google Sheet
+              </>
+            )}
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
