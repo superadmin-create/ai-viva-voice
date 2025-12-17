@@ -3,6 +3,7 @@ import { type Server } from "http";
 import { storage } from "./storage";
 import { insertVivaResultSchema } from "@shared/schema";
 import { generateVivaQuestions, evaluateAnswer, textToSpeech } from "./lib/openai-service";
+import { syncVivaResultToSheet, createVivaResultsSheet } from "./lib/google-sheets-service";
 import { z } from "zod";
 
 export async function registerRoutes(
@@ -72,6 +73,14 @@ export async function registerRoutes(
       const validatedData = insertVivaResultSchema.parse(req.body);
       const result = await storage.createVivaResult(validatedData);
       
+      // Sync to Google Sheets in the background
+      syncVivaResultToSheet(result).then(() => {
+        storage.updateSheetSyncStatus(result.id, "synced").catch(console.error);
+      }).catch((error) => {
+        console.error("Failed to sync to Google Sheets:", error);
+        storage.updateSheetSyncStatus(result.id, "failed").catch(console.error);
+      });
+      
       res.json(result);
     } catch (error: any) {
       console.error("Error submitting viva result:", error);
@@ -126,6 +135,20 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error fetching results by subject:", error);
       res.status(500).json({ error: error.message || "Failed to fetch results" });
+    }
+  });
+
+  // Create a new Google Sheet for results (admin utility)
+  app.post("/api/admin/create-sheet", async (req, res) => {
+    try {
+      const spreadsheetId = await createVivaResultsSheet();
+      res.json({ 
+        spreadsheetId,
+        message: "Spreadsheet created successfully. Set GOOGLE_SHEET_ID environment variable to use it."
+      });
+    } catch (error: any) {
+      console.error("Error creating sheet:", error);
+      res.status(500).json({ error: error.message || "Failed to create sheet" });
     }
   });
 
