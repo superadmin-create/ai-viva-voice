@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -16,3 +16,30 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+export const vivaResults = pgTable("viva_results", {
+  id: serial("id").primaryKey(),
+  studentName: text("student_name").notNull(),
+  studentEmail: text("student_email").notNull(),
+  studentPhone: text("student_phone").notNull(),
+  subject: text("subject").notNull(),
+  score: integer("score").notNull().default(0),
+  maxScore: integer("max_score").notNull().default(10),
+  transcript: jsonb("transcript").notNull().$type<Array<{
+    question: string;
+    answer: string;
+    feedback: string;
+    score: number;
+  }>>(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  status: text("status").notNull().default("completed"),
+  sheetSynced: text("sheet_synced").default("pending"),
+});
+
+export const insertVivaResultSchema = createInsertSchema(vivaResults).omit({
+  id: true,
+  timestamp: true,
+});
+
+export type InsertVivaResult = z.infer<typeof insertVivaResultSchema>;
+export type VivaResult = typeof vivaResults.$inferSelect;
