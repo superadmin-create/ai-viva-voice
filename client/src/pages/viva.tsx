@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Mic, Volume2, CheckCircle2, User, Mail, Phone, ArrowLeft } from "lucide-react";
+import { Loader2, Mic, Volume2, CheckCircle2, User, Mail, Phone, ArrowLeft, Clock } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -24,6 +24,8 @@ type SubjectInfo = {
   modules: { title: string; topics: string[] }[];
 };
 
+const SILENCE_TIMEOUT_MS = 4000;
+
 export default function VivaPage() {
   const [, params] = useRoute("/:subject");
   const subject = params?.subject || "";
@@ -38,10 +40,25 @@ export default function VivaPage() {
   const [isListening, setIsListening] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
   
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const autoListenRef = useRef<boolean>(false);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSpeechTimeRef = useRef<number>(0);
+  const currentAnswerRef = useRef<string>("");
+  const isEvaluatingRef = useRef<boolean>(false);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    currentAnswerRef.current = currentAnswer;
+  }, [currentAnswer]);
+
+  useEffect(() => {
+    isEvaluatingRef.current = isEvaluating;
+  }, [isEvaluating]);
 
   const { data: subjectInfo } = useQuery<SubjectInfo>({
     queryKey: ["subject", subject],
@@ -89,7 +106,108 @@ export default function VivaPage() {
     },
   });
 
-  // Initialize speech recognition
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    setSilenceCountdown(null);
+  }, []);
+
+  const processAnswer = useCallback(async (answer: string, questionIndex: number, allQuestions: string[], currentTranscript: TranscriptItem[]) => {
+    if (!answer.trim() || isEvaluatingRef.current) return;
+
+    clearSilenceTimer();
+    autoListenRef.current = false;
+    
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+    }
+    setIsListening(false);
+    setIsEvaluating(true);
+
+    try {
+      const evaluation = await evaluateAnswerMutation.mutateAsync({
+        question: allQuestions[questionIndex],
+        answer: answer,
+      });
+
+      const newTranscriptItem: TranscriptItem = {
+        question: allQuestions[questionIndex],
+        answer: answer,
+        feedback: evaluation.feedback,
+        score: evaluation.score,
+      };
+
+      const updatedTranscript = [...currentTranscript, newTranscriptItem];
+      setTranscript(updatedTranscript);
+      setCurrentAnswer("");
+
+      if (questionIndex < allQuestions.length - 1) {
+        const nextIndex = questionIndex + 1;
+        setCurrentQuestionIndex(nextIndex);
+        setIsEvaluating(false);
+        
+        // Speak next question and auto-listen
+        await speakTextAsync(`Question ${nextIndex + 1}: ${allQuestions[nextIndex]}`);
+        startListeningWithSilenceDetection();
+      } else {
+        // Final submission
+        setStep("submitting");
+        const totalScore = updatedTranscript.reduce((sum, t) => sum + t.score, 0);
+
+        await submitResultsMutation.mutateAsync({
+          studentName: studentInfo.name,
+          studentEmail: studentInfo.email,
+          studentPhone: studentInfo.phone,
+          subject,
+          score: totalScore,
+          maxScore: allQuestions.length * 10,
+          transcript: updatedTranscript,
+          status: "completed",
+          sheetSynced: "pending",
+        });
+
+        setStep("completed");
+        setIsEvaluating(false);
+      }
+    } catch (error) {
+      console.error("Error processing answer:", error);
+      toast.error("Failed to evaluate answer. Please try again.");
+      setIsEvaluating(false);
+      startListeningWithSilenceDetection();
+    }
+  }, [subject, studentInfo, clearSilenceTimer]);
+
+  const startSilenceTimer = useCallback(() => {
+    clearSilenceTimer();
+    
+    // Start countdown display
+    setSilenceCountdown(SILENCE_TIMEOUT_MS / 1000);
+    countdownIntervalRef.current = setInterval(() => {
+      setSilenceCountdown(prev => {
+        if (prev === null || prev <= 1) return null;
+        return prev - 1;
+      });
+    }, 1000);
+
+    // Auto-submit after silence
+    silenceTimerRef.current = setTimeout(() => {
+      clearSilenceTimer();
+      const answer = currentAnswerRef.current;
+      if (answer.trim() && !isEvaluatingRef.current) {
+        processAnswer(answer, currentQuestionIndex, questions, transcript);
+      }
+    }, SILENCE_TIMEOUT_MS);
+  }, [clearSilenceTimer, processAnswer, currentQuestionIndex, questions, transcript]);
+
+  // Initialize speech recognition with silence detection
   useEffect(() => {
     if ('webkitSpeechRecognition' in window) {
       const SpeechRecognition = (window as any).webkitSpeechRecognition;
@@ -99,20 +217,31 @@ export default function VivaPage() {
 
       recognitionRef.current.onresult = (event: any) => {
         let finalTranscript = '';
+        
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (event.results[i].isFinal) {
             finalTranscript += event.results[i][0].transcript + ' ';
           }
         }
+        
+        // Record last speech time on any result (interim or final)
+        lastSpeechTimeRef.current = Date.now();
+        
         if (finalTranscript) {
           setCurrentAnswer(prev => (prev + ' ' + finalTranscript).trim());
+        }
+        
+        // Always restart silence timer on any speech activity
+        // This ensures the timer resets while speaking and starts countdown after silence
+        if (autoListenRef.current) {
+          startSilenceTimer();
         }
       };
 
       recognitionRef.current.onend = () => {
         setIsListening(false);
         // Auto-restart if we want to keep listening
-        if (autoListenRef.current && recognitionRef.current) {
+        if (autoListenRef.current && recognitionRef.current && !isEvaluatingRef.current) {
           try {
             recognitionRef.current.start();
             setIsListening(true);
@@ -124,61 +253,79 @@ export default function VivaPage() {
 
       recognitionRef.current.onerror = (event: any) => {
         console.error("Speech recognition error:", event.error);
-        if (event.error !== 'no-speech') {
+        if (event.error === 'no-speech') {
+          // No speech detected - if we have an answer, consider submitting
+          if (currentAnswerRef.current.trim() && !isEvaluatingRef.current) {
+            startSilenceTimer();
+          }
+        } else {
           setIsListening(false);
         }
       };
     }
-  }, []);
 
-  const startListening = useCallback(() => {
-    if (recognitionRef.current && !isListening) {
+    return () => {
+      clearSilenceTimer();
+    };
+  }, [startSilenceTimer, clearSilenceTimer]);
+
+  const startListeningWithSilenceDetection = useCallback(() => {
+    if (recognitionRef.current && !isEvaluatingRef.current) {
       try {
         autoListenRef.current = true;
         recognitionRef.current.start();
         setIsListening(true);
+        lastSpeechTimeRef.current = Date.now();
+        // Start initial silence timer
+        startSilenceTimer();
       } catch (e) {
         console.log("Recognition already started");
       }
     }
-  }, [isListening]);
+  }, [startSilenceTimer]);
 
   const stopListening = useCallback(() => {
     autoListenRef.current = false;
+    clearSilenceTimer();
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       setIsListening(false);
     }
-  }, []);
+  }, [clearSilenceTimer]);
 
-  const speakText = useCallback(async (text: string, onComplete?: () => void) => {
-    setIsSpeaking(true);
-    try {
-      const response = await fetch("/api/viva/text-to-speech", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
+  const speakTextAsync = useCallback((text: string): Promise<void> => {
+    return new Promise(async (resolve) => {
+      setIsSpeaking(true);
+      try {
+        const response = await fetch("/api/viva/text-to-speech", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
 
-      if (!response.ok) throw new Error("Failed to generate speech");
+        if (!response.ok) throw new Error("Failed to generate speech");
 
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      
-      if (audioRef.current) {
-        audioRef.current.src = audioUrl;
-        audioRef.current.onended = () => {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        if (audioRef.current) {
+          audioRef.current.src = audioUrl;
+          audioRef.current.onended = () => {
+            setIsSpeaking(false);
+            URL.revokeObjectURL(audioUrl);
+            resolve();
+          };
+          await audioRef.current.play();
+        } else {
           setIsSpeaking(false);
-          URL.revokeObjectURL(audioUrl);
-          if (onComplete) onComplete();
-        };
-        await audioRef.current.play();
+          resolve();
+        }
+      } catch (error) {
+        console.error("TTS error:", error);
+        setIsSpeaking(false);
+        resolve();
       }
-    } catch (error) {
-      console.error("TTS error:", error);
-      setIsSpeaking(false);
-      if (onComplete) onComplete();
-    }
+    });
   }, []);
 
   const startExam = async () => {
@@ -196,80 +343,22 @@ export default function VivaPage() {
     setStep("exam");
 
     // Greet student and ask first question
-    const greeting = `Hello ${studentInfo.name}! Welcome to your ${subjectInfo?.name || subject} examination. I will ask you ${result.questions.length} questions. Please answer each question clearly. Let's begin.`;
+    const greeting = `Hello ${studentInfo.name}! Welcome to your ${subjectInfo?.name || subject} examination. I will ask you ${result.questions.length} questions. Please answer each question clearly. After you finish speaking, I will automatically move to the next question. Let's begin.`;
     
-    await speakText(greeting, () => {
-      if (result.questions.length > 0) {
-        speakText(`Question 1: ${result.questions[0]}`, () => {
-          // Auto-start listening after question is asked
-          startListening();
-        });
-      }
-    });
+    await speakTextAsync(greeting);
+    
+    if (result.questions.length > 0) {
+      await speakTextAsync(`Question 1: ${result.questions[0]}`);
+      startListeningWithSilenceDetection();
+    }
   };
 
-  const submitAnswer = async () => {
+  const manualSubmitAnswer = async () => {
     if (!currentAnswer.trim()) {
       toast.error("Please provide an answer");
       return;
     }
-
-    stopListening();
-    setIsEvaluating(true);
-
-    try {
-      const evaluation = await evaluateAnswerMutation.mutateAsync({
-        question: questions[currentQuestionIndex],
-        answer: currentAnswer,
-      });
-
-      const newTranscriptItem: TranscriptItem = {
-        question: questions[currentQuestionIndex],
-        answer: currentAnswer,
-        feedback: evaluation.feedback,
-        score: evaluation.score,
-      };
-
-      const updatedTranscript = [...transcript, newTranscriptItem];
-      setTranscript(updatedTranscript);
-      setCurrentAnswer("");
-
-      if (currentQuestionIndex < questions.length - 1) {
-        // Move to next question immediately
-        const nextIndex = currentQuestionIndex + 1;
-        setCurrentQuestionIndex(nextIndex);
-        setIsEvaluating(false);
-        
-        // Speak next question and auto-listen
-        speakText(`Question ${nextIndex + 1}: ${questions[nextIndex]}`, () => {
-          startListening();
-        });
-      } else {
-        // Final submission
-        setStep("submitting");
-        const totalScore = updatedTranscript.reduce((sum, t) => sum + t.score, 0);
-
-        await submitResultsMutation.mutateAsync({
-          studentName: studentInfo.name,
-          studentEmail: studentInfo.email,
-          studentPhone: studentInfo.phone,
-          subject,
-          score: totalScore,
-          maxScore: questions.length * 10,
-          transcript: updatedTranscript,
-          status: "completed",
-          sheetSynced: "pending",
-        });
-
-        setStep("completed");
-        setIsEvaluating(false);
-      }
-    } catch (error) {
-      console.error("Error submitting answer:", error);
-      toast.error("Failed to evaluate answer. Please try again.");
-      setIsEvaluating(false);
-      startListening();
-    }
+    processAnswer(currentAnswer, currentQuestionIndex, questions, transcript);
   };
 
   const displaySubjectName = subjectInfo?.name || subject.replace(/-/g, " ");
@@ -358,7 +447,7 @@ export default function VivaPage() {
               Start Examination
             </Button>
             <p className="text-xs text-muted-foreground text-center">
-              The AI will ask questions via voice. Make sure your microphone is enabled.
+              The AI will ask questions via voice and automatically listen for your answers. Make sure your microphone is enabled.
             </p>
           </CardContent>
         </Card>
@@ -409,6 +498,12 @@ export default function VivaPage() {
                 <div className="flex items-center justify-between mb-2">
                   <Label htmlFor="answer">Your Answer</Label>
                   <div className="flex items-center gap-2">
+                    {silenceCountdown !== null && currentAnswer.trim() && (
+                      <Badge variant="secondary" className="bg-amber-100 text-amber-700">
+                        <Clock className="h-3 w-3 mr-1" />
+                        Auto-submit in {silenceCountdown}s
+                      </Badge>
+                    )}
                     {isListening && (
                       <Badge variant="default" className="bg-red-500 animate-pulse">
                         <Mic className="h-3 w-3 mr-1" />
@@ -420,8 +515,13 @@ export default function VivaPage() {
                 <Textarea
                   id="answer"
                   value={currentAnswer}
-                  onChange={(e) => setCurrentAnswer(e.target.value)}
-                  placeholder="Speak your answer or type here..."
+                  onChange={(e) => {
+                    setCurrentAnswer(e.target.value);
+                    if (e.target.value.trim()) {
+                      startSilenceTimer();
+                    }
+                  }}
+                  placeholder="Speak your answer - it will be submitted automatically when you pause..."
                   className="min-h-[150px] text-lg"
                   data-testid="input-answer"
                 />
@@ -430,15 +530,16 @@ export default function VivaPage() {
               <div className="flex gap-3">
                 <Button
                   variant="outline"
-                  onClick={isListening ? stopListening : startListening}
+                  onClick={isListening ? stopListening : startListeningWithSilenceDetection}
                   className={isListening ? 'border-red-500 text-red-500' : ''}
+                  disabled={isEvaluating}
                   data-testid="button-voice"
                 >
                   <Mic className={`h-4 w-4 mr-2 ${isListening ? 'animate-pulse' : ''}`} />
-                  {isListening ? 'Stop Listening' : 'Start Listening'}
+                  {isListening ? 'Pause Listening' : 'Resume Listening'}
                 </Button>
                 <Button
-                  onClick={submitAnswer}
+                  onClick={manualSubmitAnswer}
                   disabled={isEvaluating || !currentAnswer.trim()}
                   className="flex-1 h-12 text-lg bg-violet-600 hover:bg-violet-700"
                   data-testid="button-submit-answer"
@@ -449,12 +550,16 @@ export default function VivaPage() {
                       Evaluating...
                     </>
                   ) : currentQuestionIndex < questions.length - 1 ? (
-                    "Submit & Next Question"
+                    "Submit Now"
                   ) : (
                     "Submit Final Answer"
                   )}
                 </Button>
               </div>
+
+              <p className="text-xs text-muted-foreground text-center">
+                Your answer will be automatically submitted after 4 seconds of silence, or you can click Submit Now.
+              </p>
             </CardContent>
           </Card>
         </div>
