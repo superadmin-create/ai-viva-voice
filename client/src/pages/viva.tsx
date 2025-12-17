@@ -440,23 +440,6 @@ export default function VivaPage() {
                 {displaySubjectName}
               </Badge>
             </CardDescription>
-            {subjectInfo && (
-              <div className="mt-4 text-left">
-                <p className="text-sm text-muted-foreground mb-2">Topics covered:</p>
-                <div className="flex flex-wrap gap-1">
-                  {subjectInfo.modules.slice(0, 3).map((m, i) => (
-                    <Badge key={i} variant="secondary" className="text-xs">
-                      {m.title}
-                    </Badge>
-                  ))}
-                  {subjectInfo.modules.length > 3 && (
-                    <Badge variant="secondary" className="text-xs">
-                      +{subjectInfo.modules.length - 3} more
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            )}
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-4">
