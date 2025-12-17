@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { insertVivaResultSchema } from "@shared/schema";
 import { generateVivaQuestions, evaluateAnswer, textToSpeech } from "./lib/openai-service";
 import { syncVivaResultToSheet, createVivaResultsSheet } from "./lib/google-sheets-service";
+import { getAllSubjects, getSubjectContent } from "./lib/subject-content";
 import { z } from "zod";
 
 export async function registerRoutes(
@@ -11,6 +12,31 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
+  // Get list of available subjects
+  app.get("/api/subjects", async (req, res) => {
+    try {
+      const subjects = getAllSubjects();
+      res.json(subjects.map(s => ({ name: s.name, slug: s.slug })));
+    } catch (error: any) {
+      console.error("Error fetching subjects:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch subjects" });
+    }
+  });
+
+  // Get subject details
+  app.get("/api/subjects/:slug", async (req, res) => {
+    try {
+      const subject = getSubjectContent(req.params.slug);
+      if (!subject) {
+        return res.status(404).json({ error: "Subject not found" });
+      }
+      res.json(subject);
+    } catch (error: any) {
+      console.error("Error fetching subject:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch subject" });
+    }
+  });
+
   // Generate viva questions for a subject
   app.post("/api/viva/generate-questions", async (req, res) => {
     try {
@@ -67,19 +93,21 @@ export async function registerRoutes(
     }
   });
 
-  // Submit viva results
+  // Submit viva results - immediately syncs to Google Sheets
   app.post("/api/viva/submit", async (req, res) => {
     try {
       const validatedData = insertVivaResultSchema.parse(req.body);
       const result = await storage.createVivaResult(validatedData);
       
-      // Sync to Google Sheets in the background
-      syncVivaResultToSheet(result).then(() => {
-        storage.updateSheetSyncStatus(result.id, "synced").catch(console.error);
-      }).catch((error) => {
-        console.error("Failed to sync to Google Sheets:", error);
-        storage.updateSheetSyncStatus(result.id, "failed").catch(console.error);
-      });
+      // Immediately sync to Google Sheets and wait for completion
+      try {
+        await syncVivaResultToSheet(result);
+        await storage.updateSheetSyncStatus(result.id, "synced");
+        console.log(`Viva result ${result.id} synced to Google Sheets successfully`);
+      } catch (sheetError: any) {
+        console.error("Failed to sync to Google Sheets:", sheetError.message);
+        await storage.updateSheetSyncStatus(result.id, "failed");
+      }
       
       res.json(result);
     } catch (error: any) {

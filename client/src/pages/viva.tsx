@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from "react";
-import { useRoute } from "wouter";
+import { useRoute, Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Mic, MicOff, Volume2, CheckCircle2, User, Mail, Phone } from "lucide-react";
-import { useMutation } from "@tanstack/react-query";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, Mic, MicOff, Volume2, CheckCircle2, User, Mail, Phone, ArrowLeft } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 type Question = {
@@ -15,6 +16,12 @@ type Question = {
   answer: string;
   feedback: string;
   score: number;
+};
+
+type SubjectInfo = {
+  name: string;
+  slug: string;
+  modules: { title: string; topics: string[] }[];
 };
 
 export default function VivaPage() {
@@ -34,6 +41,16 @@ export default function VivaPage() {
   
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  const { data: subjectInfo } = useQuery<SubjectInfo>({
+    queryKey: ["subject", subject],
+    queryFn: async () => {
+      const response = await fetch(`/api/subjects/${subject}`);
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: !!subject,
+  });
 
   const generateQuestionsMutation = useMutation({
     mutationFn: async (subject: string) => {
@@ -80,7 +97,7 @@ export default function VivaPage() {
 
       recognitionRef.current.onresult = (event: any) => {
         const text = event.results[0][0].transcript;
-        setCurrentAnswer(text);
+        setCurrentAnswer((prev) => prev + " " + text);
       };
 
       recognitionRef.current.onend = () => {
@@ -159,12 +176,15 @@ export default function VivaPage() {
       answer: currentAnswer,
     });
 
-    setTranscript([...transcript, {
+    const newTranscriptItem = {
       text: questions[currentQuestionIndex],
       answer: currentAnswer,
       feedback: evaluation.feedback,
       score: evaluation.score,
-    }]);
+    };
+
+    const updatedTranscript = [...transcript, newTranscriptItem];
+    setTranscript(updatedTranscript);
 
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
@@ -172,12 +192,7 @@ export default function VivaPage() {
       setIsProcessing(false);
       await speakQuestion(questions[currentQuestionIndex + 1]);
     } else {
-      const totalScore = [...transcript, {
-        text: questions[currentQuestionIndex],
-        answer: currentAnswer,
-        feedback: evaluation.feedback,
-        score: evaluation.score,
-      }].reduce((sum, t) => sum + t.score, 0);
+      const totalScore = updatedTranscript.reduce((sum, t) => sum + t.score, 0);
 
       await submitResultsMutation.mutateAsync({
         studentName: studentInfo.name,
@@ -186,12 +201,12 @@ export default function VivaPage() {
         subject,
         score: totalScore,
         maxScore: questions.length * 10,
-        transcript: [...transcript, {
-          question: questions[currentQuestionIndex],
-          answer: currentAnswer,
-          feedback: evaluation.feedback,
-          score: evaluation.score,
-        }],
+        transcript: updatedTranscript.map(t => ({
+          question: t.text,
+          answer: t.answer,
+          feedback: t.feedback,
+          score: t.score,
+        })),
         status: "completed",
         sheetSynced: "pending",
       });
@@ -200,6 +215,8 @@ export default function VivaPage() {
       setIsProcessing(false);
     }
   };
+
+  const displaySubjectName = subjectInfo?.name || subject.replace(/-/g, " ");
 
   if (step === "register") {
     return (
@@ -211,9 +228,26 @@ export default function VivaPage() {
             </CardTitle>
             <CardDescription className="text-lg">
               <Badge variant="outline" className="text-lg px-4 py-1 capitalize" data-testid="badge-subject">
-                {subject}
+                {displaySubjectName}
               </Badge>
             </CardDescription>
+            {subjectInfo && (
+              <div className="mt-4 text-left">
+                <p className="text-sm text-muted-foreground mb-2">Topics covered:</p>
+                <div className="flex flex-wrap gap-1">
+                  {subjectInfo.modules.slice(0, 3).map((m, i) => (
+                    <Badge key={i} variant="secondary" className="text-xs">
+                      {m.title}
+                    </Badge>
+                  ))}
+                  {subjectInfo.modules.length > 3 && (
+                    <Badge variant="secondary" className="text-xs">
+                      +{subjectInfo.modules.length - 3} more
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-4">
@@ -298,29 +332,43 @@ export default function VivaPage() {
                 <Volume2 className={isSpeaking ? "animate-pulse text-violet-600" : "text-muted-foreground"} />
                 <span data-testid="text-current-question">{questions[currentQuestionIndex]}</span>
               </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => speakQuestion(questions[currentQuestionIndex])}
+                disabled={isSpeaking}
+                className="mt-2 w-fit"
+                data-testid="button-replay"
+              >
+                <Volume2 className="h-4 w-4 mr-2" />
+                Replay Question
+              </Button>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
                 <Label htmlFor="answer">Your Answer</Label>
                 <div className="relative mt-2">
-                  <Input
+                  <Textarea
                     id="answer"
                     value={currentAnswer}
                     onChange={(e) => setCurrentAnswer(e.target.value)}
                     placeholder="Type or speak your answer..."
-                    className="pr-12"
+                    className="min-h-[120px] pr-12"
                     data-testid="input-answer"
                   />
                   <Button
                     size="icon"
                     variant={isListening ? "default" : "outline"}
-                    className="absolute right-1 top-1/2 -translate-y-1/2"
+                    className="absolute right-2 top-2"
                     onClick={isListening ? stopListening : startListening}
                     data-testid="button-voice"
                   >
                     {isListening ? <Mic className="h-4 w-4 animate-pulse" /> : <MicOff className="h-4 w-4" />}
                   </Button>
                 </div>
+                {isListening && (
+                  <p className="text-sm text-violet-600 mt-2 animate-pulse">Listening... Speak now</p>
+                )}
               </div>
 
               <Button
@@ -349,10 +397,6 @@ export default function VivaPage() {
   }
 
   if (step === "completed") {
-    const totalScore = transcript.reduce((sum, t) => sum + t.score, 0);
-    const maxScore = questions.length * 10;
-    const percentage = (totalScore / maxScore) * 100;
-
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-slate-50 flex items-center justify-center p-6">
         <Card className="w-full max-w-2xl border-2 shadow-2xl" data-testid="card-completion">
@@ -364,25 +408,28 @@ export default function VivaPage() {
               Examination Complete!
             </CardTitle>
             <CardDescription className="text-lg mt-2">
-              Thank you for participating
+              Thank you for participating, {studentInfo.name}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 text-center">
             <div className="bg-violet-50 rounded-lg p-6">
-              <p className="text-muted-foreground mb-2">Your examination has been submitted</p>
+              <p className="text-muted-foreground mb-2">Your examination has been submitted and saved</p>
               <p className="text-sm text-muted-foreground">
-                Results will be reviewed by the administrator and saved to the records.
+                Results are only visible to the administrator. Your performance has been recorded and synced to the examination records.
               </p>
             </div>
 
             <div className="pt-4">
-              <Button
-                onClick={() => window.location.href = "/"}
-                className="bg-violet-600 hover:bg-violet-700"
-                data-testid="button-home"
-              >
-                Return to Home
-              </Button>
+              <Link href="/">
+                <Button
+                  variant="outline"
+                  className="mr-4"
+                  data-testid="button-home"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Return to Home
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
