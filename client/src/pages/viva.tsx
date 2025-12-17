@@ -369,7 +369,7 @@ export default function VivaPage() {
         <Card className="w-full max-w-lg border-2 shadow-2xl" data-testid="card-registration">
           <CardHeader className="text-center">
             <CardTitle className="text-4xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent" data-testid="heading-viva-title">
-              AI Viva Voce
+              AI Mock Viva
             </CardTitle>
             <CardDescription className="text-lg">
               <Badge variant="outline" className="text-lg px-4 py-1 capitalize" data-testid="badge-subject">

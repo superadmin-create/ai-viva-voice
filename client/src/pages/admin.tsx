@@ -178,7 +178,7 @@ export default function AdminPanel() {
           <h1 className="text-5xl font-bold mb-2 bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent" data-testid="heading-admin">
             Admin Dashboard
           </h1>
-          <p className="text-muted-foreground text-lg">Monitor and manage viva voce examinations</p>
+          <p className="text-muted-foreground text-lg">Monitor and manage mock viva examinations</p>
           <p className="text-sm text-muted-foreground mt-1">
             Results are automatically saved to Google Sheet: <strong>AI Viva Results</strong>
           </p>
@@ -227,7 +227,7 @@ export default function AdminPanel() {
             <Card className="border-2" data-testid="card-results-table">
               <CardHeader>
                 <CardTitle>Examination Results</CardTitle>
-                <CardDescription>All viva voce examination records</CardDescription>
+                <CardDescription>All mock viva examination records</CardDescription>
               </CardHeader>
               <CardContent>
                 {isLoading ? (

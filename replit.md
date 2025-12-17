@@ -1,4 +1,4 @@
-# AI Viva Voce Platform
+# AI Mock Viva Platform
 
 ## Overview
 
