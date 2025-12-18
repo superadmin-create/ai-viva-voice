@@ -14,32 +14,20 @@ export type QuestionGenerationResult = {
 export async function generateVivaQuestions(subjectSlug: string, count: number = 5): Promise<string[]> {
   const subjectContent = getSubjectContent(subjectSlug);
   
-  let systemPrompt: string;
+  let prompt: string;
   
   if (subjectContent) {
-    const contentPrompt = buildSubjectPrompt(subjectContent);
-    systemPrompt = `You are an expert examiner creating oral examination questions for the following course:
-
-${contentPrompt}
-
-Generate ${count} challenging but fair viva voce questions that test the student's understanding of the topics covered in this course. The questions should cover different modules and topics. Return a JSON object with a "questions" array containing exactly ${count} question strings.`;
+    const topics = subjectContent.modules.flatMap(m => m.topics).slice(0, 10).join(", ");
+    prompt = `Generate ${count} short oral exam questions for "${subjectContent.name}". Topics: ${topics}. Return JSON: {"questions":["q1","q2",...]}`;
   } else {
-    systemPrompt = `You are an expert examiner creating oral examination questions. Generate ${count} challenging but fair viva voce questions for the subject: ${subjectSlug}. Return a JSON object with a "questions" array containing exactly ${count} question strings.`;
+    prompt = `Generate ${count} short oral exam questions for "${subjectSlug}". Return JSON: {"questions":["q1","q2",...]}`;
   }
 
   const response = await openai.chat.completions.create({
-    model: "gpt-5",
-    messages: [
-      {
-        role: "system",
-        content: systemPrompt
-      },
-      {
-        role: "user",
-        content: `Generate ${count} viva questions.`
-      }
-    ],
-    response_format: { type: "json_object" }
+    model: "gpt-4o-mini",
+    messages: [{ role: "user", content: prompt }],
+    response_format: { type: "json_object" },
+    max_tokens: 500,
   });
 
   const result = JSON.parse(response.choices[0].message.content || "{}");
@@ -102,6 +90,7 @@ export async function textToSpeech(text: string): Promise<Buffer> {
     model: "tts-1",
     voice: "alloy",
     input: text,
+    speed: 1.15,
   });
 
   const buffer = Buffer.from(await mp3.arrayBuffer());

@@ -217,6 +217,12 @@ export default function VivaPage() {
 
   const startListeningWithSilenceDetection = useCallback(() => {
     if (recognitionRef.current && !isProcessingRef.current) {
+      // Stop audio if playing to allow immediate mic start
+      if (audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        setIsSpeaking(false);
+      }
       try {
         autoListenRef.current = true;
         recognitionRef.current.start();
