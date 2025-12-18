@@ -90,7 +90,6 @@ export async function textToSpeech(text: string): Promise<Buffer> {
     model: "tts-1",
     voice: "alloy",
     input: text,
-    speed: 1.15,
   });
 
   const buffer = Buffer.from(await mp3.arrayBuffer());

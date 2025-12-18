@@ -47,6 +47,8 @@ export default function VivaPage() {
   const currentAnswerRef = useRef<string>("");
   const isProcessingRef = useRef<boolean>(false);
   const questionsRef = useRef<string[]>([]);
+  const pendingStartRef = useRef<boolean>(false);
+  const recognitionActiveRef = useRef<boolean>(false);
 
   useEffect(() => {
     currentAnswerRef.current = currentAnswer;
@@ -179,6 +181,11 @@ export default function VivaPage() {
       recognitionRef.current.continuous = true;
       recognitionRef.current.interimResults = true;
 
+      recognitionRef.current.onstart = () => {
+        recognitionActiveRef.current = true;
+        setIsListening(true);
+      };
+
       recognitionRef.current.onresult = (event: any) => {
         let finalTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -195,11 +202,18 @@ export default function VivaPage() {
       };
 
       recognitionRef.current.onend = () => {
+        recognitionActiveRef.current = false;
         setIsListening(false);
-        if (autoListenRef.current && recognitionRef.current && !isProcessingRef.current) {
+        
+        // Handle pending start request
+        if (pendingStartRef.current && recognitionRef.current && !isProcessingRef.current) {
+          pendingStartRef.current = false;
           try {
             recognitionRef.current.start();
-            setIsListening(true);
+          } catch (e) {}
+        } else if (autoListenRef.current && recognitionRef.current && !isProcessingRef.current) {
+          try {
+            recognitionRef.current.start();
           } catch (e) {}
         }
       };
@@ -208,6 +222,7 @@ export default function VivaPage() {
         if (event.error === 'no-speech' && currentAnswerRef.current.trim()) {
           startSilenceTimer();
         } else if (event.error !== 'no-speech') {
+          recognitionActiveRef.current = false;
           setIsListening(false);
         }
       };
@@ -223,17 +238,32 @@ export default function VivaPage() {
         audioRef.current.currentTime = 0;
         setIsSpeaking(false);
       }
+      
+      autoListenRef.current = true;
+      
+      // If recognition is currently active/stopping, queue a pending start
+      if (recognitionActiveRef.current) {
+        pendingStartRef.current = true;
+        setIsListening(true); // Show UI as listening
+        startSilenceTimer();
+        return;
+      }
+      
       try {
-        autoListenRef.current = true;
         recognitionRef.current.start();
+        startSilenceTimer();
+      } catch (e) {
+        // If start fails (still stopping), queue it
+        pendingStartRef.current = true;
         setIsListening(true);
         startSilenceTimer();
-      } catch (e) {}
+      }
     }
   }, [startSilenceTimer]);
 
   const stopListening = useCallback(() => {
     autoListenRef.current = false;
+    pendingStartRef.current = false;
     clearSilenceTimer();
     if (recognitionRef.current) {
       recognitionRef.current.stop();
