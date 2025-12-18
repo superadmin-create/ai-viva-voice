@@ -224,6 +224,94 @@ export async function registerRoutes(
     }
   });
 
+  // Submit viva results with raw answers - evaluates in background
+  app.post("/api/viva/submit-fast", async (req, res) => {
+    try {
+      const { studentName, studentEmail, studentPhone, subject, rawAnswers } = req.body;
+      
+      if (!studentName || !studentEmail || !studentPhone || !subject || !rawAnswers) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      // Create initial result with placeholder scores
+      const placeholderTranscript = rawAnswers.map((ra: { question: string; answer: string }) => ({
+        question: ra.question,
+        answer: ra.answer,
+        feedback: "Evaluating...",
+        score: 0,
+      }));
+
+      const result = await storage.createVivaResult({
+        studentName,
+        studentEmail,
+        studentPhone,
+        subject,
+        score: 0,
+        maxScore: rawAnswers.length * 10,
+        transcript: placeholderTranscript,
+        status: "evaluating",
+        sheetSynced: "pending",
+      });
+
+      // Return immediately
+      res.json({ success: true, id: result.id });
+
+      // Evaluate all answers in background
+      (async () => {
+        try {
+          const evaluatedTranscript = await Promise.all(
+            rawAnswers.map(async (ra: { question: string; answer: string }) => {
+              try {
+                const evaluation = await evaluateAnswer(ra.question, ra.answer, subject);
+                return {
+                  question: ra.question,
+                  answer: ra.answer,
+                  feedback: evaluation.feedback,
+                  score: evaluation.score,
+                };
+              } catch (e) {
+                return {
+                  question: ra.question,
+                  answer: ra.answer,
+                  feedback: "Evaluation failed",
+                  score: 5,
+                };
+              }
+            })
+          );
+
+          const totalScore = evaluatedTranscript.reduce((sum, t) => sum + t.score, 0);
+          
+          // Update the result with evaluations
+          await storage.updateVivaResult(result.id, {
+            transcript: evaluatedTranscript,
+            score: totalScore,
+            status: "completed",
+          });
+
+          // Sync to Google Sheets
+          const updatedResult = await storage.getVivaResultById(result.id);
+          if (updatedResult) {
+            try {
+              await syncVivaResultToSheet(updatedResult);
+              await storage.updateSheetSyncStatus(result.id, "synced");
+            } catch (e) {
+              await storage.updateSheetSyncStatus(result.id, "failed");
+            }
+          }
+          
+          console.log(`Viva ${result.id} evaluated: ${totalScore}/${rawAnswers.length * 10}`);
+        } catch (error) {
+          console.error("Background evaluation error:", error);
+        }
+      })();
+
+    } catch (error: any) {
+      console.error("Error submitting viva:", error);
+      res.status(500).json({ error: error.message || "Failed to submit" });
+    }
+  });
+
   // Submit viva results - immediately syncs to Google Sheets
   app.post("/api/viva/submit", async (req, res) => {
     try {
