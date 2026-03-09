@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key } from "lucide-react";
+import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -445,6 +445,18 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                         >
                           <ExternalLink className="h-4 w-4 mr-1" />
                           Open
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`${window.location.origin}/${subject.slug}`);
+                            toast.success("Link copied to clipboard!");
+                          }}
+                          data-testid={`button-copy-link-${subject.slug}`}
+                        >
+                          <Copy className="h-4 w-4 mr-1" />
+                          Copy Link
                         </Button>
                         {!subject.isBuiltIn && subject.id && (isAdmin || subject.createdBy === user.id) && (
                           <Button
