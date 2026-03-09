@@ -727,12 +727,20 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
             <div>
               <Label>Question Text</Label>
               <Textarea
-                placeholder="Enter your question..."
+                placeholder={"e.g., Explain the difference between a stack and a queue, including their time complexities for insertion and deletion operations."}
                 value={newQuestion}
                 onChange={(e) => setNewQuestion(e.target.value)}
                 className="min-h-[100px]"
                 data-testid="input-question-text"
               />
+              <p className="text-xs text-muted-foreground mt-2">
+                Write a clear, open-ended question that a student would answer verbally. One question per submission. Example formats:
+              </p>
+              <ul className="text-xs text-muted-foreground mt-1 list-disc list-inside space-y-0.5">
+                <li>"What is polymorphism in object-oriented programming? Give an example."</li>
+                <li>"Describe the process of photosynthesis and explain its importance."</li>
+                <li>"Compare and contrast TCP and UDP protocols."</li>
+              </ul>
             </div>
           </div>
           <DialogFooter>
