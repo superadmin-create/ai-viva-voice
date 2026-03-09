@@ -157,12 +157,15 @@ export async function registerRoutes(
   });
 
   // Get list of available subjects (combines built-in and custom)
+  // Includes createdBy for authenticated users only
   app.get("/api/subjects", async (req, res) => {
     try {
+      const isAuthenticated = !!req.session.userId;
       const builtInSubjects = getAllSubjects().map(s => ({ 
         name: s.name, 
         slug: s.slug,
-        isBuiltIn: true 
+        isBuiltIn: true,
+        ...(isAuthenticated ? { createdBy: null } : {}),
       }));
       
       const customSubjects = await storage.getSubjects();
@@ -170,7 +173,8 @@ export async function registerRoutes(
         id: s.id,
         name: s.name,
         slug: s.slug,
-        isBuiltIn: false
+        isBuiltIn: false,
+        ...(isAuthenticated ? { createdBy: s.createdBy } : {}),
       }));
       
       res.json([...builtInSubjects, ...customFormatted]);
@@ -207,10 +211,13 @@ export async function registerRoutes(
     }
   });
 
-  // Create a new custom subject
-  app.post("/api/admin/subjects", requireAdmin, async (req, res) => {
+  // Create a new custom subject (any authenticated user)
+  app.post("/api/admin/subjects", requireAuth, async (req, res) => {
     try {
-      const validatedData = insertSubjectSchema.parse(req.body);
+      const validatedData = insertSubjectSchema.parse({
+        ...req.body,
+        createdBy: req.session.userId,
+      });
       const subject = await storage.createSubject(validatedData);
       res.json(subject);
     } catch (error: any) {
@@ -222,12 +229,20 @@ export async function registerRoutes(
     }
   });
 
-  // Update a custom subject
-  app.put("/api/admin/subjects/:id", requireAdmin, async (req, res) => {
+  // Update a custom subject (admin: any, user: own only)
+  app.put("/api/admin/subjects/:id", requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid ID" });
+      }
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role !== "admin") {
+        const existing = await storage.getSubjects();
+        const target = existing.find(s => s.id === id);
+        if (!target || target.createdBy !== req.session.userId) {
+          return res.status(403).json({ error: "You can only update your own subjects" });
+        }
       }
       const subject = await storage.updateSubject(id, req.body);
       if (!subject) {
@@ -240,12 +255,20 @@ export async function registerRoutes(
     }
   });
 
-  // Delete a custom subject
-  app.delete("/api/admin/subjects/:id", requireAdmin, async (req, res) => {
+  // Delete a custom subject (admin: any, user: own only)
+  app.delete("/api/admin/subjects/:id", requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid ID" });
+      }
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role !== "admin") {
+        const existing = await storage.getSubjects();
+        const target = existing.find(s => s.id === id);
+        if (!target || target.createdBy !== req.session.userId) {
+          return res.status(403).json({ error: "You can only delete your own subjects" });
+        }
       }
       await storage.deleteSubject(id);
       res.json({ success: true });
@@ -255,9 +278,16 @@ export async function registerRoutes(
     }
   });
 
-  // Get manual questions for a subject
-  app.get("/api/admin/subjects/:slug/questions", requireAdmin, async (req, res) => {
+  // Get manual questions for a subject (admin: any, user: own subjects only)
+  app.get("/api/admin/subjects/:slug/questions", requireAuth, async (req, res) => {
     try {
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role !== "admin") {
+        const subject = await storage.getSubjectBySlug(req.params.slug);
+        if (subject && subject.createdBy !== req.session.userId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
       const questions = await storage.getManualQuestionsBySubject(req.params.slug);
       res.json(questions);
     } catch (error: any) {
@@ -266,10 +296,17 @@ export async function registerRoutes(
     }
   });
 
-  // Add a manual question
-  app.post("/api/admin/questions", requireAdmin, async (req, res) => {
+  // Add a manual question (admin: any, user: own subjects only)
+  app.post("/api/admin/questions", requireAuth, async (req, res) => {
     try {
       const validatedData = insertManualQuestionSchema.parse(req.body);
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role !== "admin") {
+        const subject = await storage.getSubjectBySlug(validatedData.subjectSlug);
+        if (subject && subject.createdBy !== req.session.userId) {
+          return res.status(403).json({ error: "You can only add questions to your own subjects" });
+        }
+      }
       const question = await storage.createManualQuestion(validatedData);
       res.json(question);
     } catch (error: any) {
@@ -281,12 +318,25 @@ export async function registerRoutes(
     }
   });
 
-  // Delete a manual question
-  app.delete("/api/admin/questions/:id", requireAdmin, async (req, res) => {
+  // Delete a manual question (admin: any, user: own subjects only)
+  app.delete("/api/admin/questions/:id", requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid ID" });
+      }
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role !== "admin") {
+        const allSubjectQuestions = await Promise.all(
+          (await storage.getSubjectsByCreator(req.session.userId!)).map(async s => {
+            const qs = await storage.getManualQuestionsBySubject(s.slug);
+            return qs.map(q => q.id);
+          })
+        );
+        const ownedQuestionIds = allSubjectQuestions.flat();
+        if (!ownedQuestionIds.includes(id)) {
+          return res.status(403).json({ error: "You can only delete questions from your own subjects" });
+        }
       }
       await storage.deleteManualQuestion(id);
       res.json({ success: true });
@@ -484,10 +534,17 @@ export async function registerRoutes(
     }
   });
 
-  // Get all viva results (admin only)
+  // Get viva results (admin: all, user: only own subjects)
   app.get("/api/admin/results", requireAuth, async (req, res) => {
     try {
-      const results = await storage.getVivaResults();
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role === "admin") {
+        const results = await storage.getVivaResults();
+        return res.json(results);
+      }
+      const userSubjects = await storage.getSubjectsByCreator(req.session.userId!);
+      const slugs = userSubjects.map(s => s.slug);
+      const results = await storage.getVivaResultsBySubjectSlugs(slugs);
       res.json(results);
     } catch (error: any) {
       console.error("Error fetching results:", error);
@@ -495,21 +552,25 @@ export async function registerRoutes(
     }
   });
 
-  // Get viva result by ID (admin only)
+  // Get viva result by ID (admin: any, user: own subjects only)
   app.get("/api/admin/results/:id", requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid ID" });
       }
-
       const result = await storage.getVivaResultById(id);
-      
       if (!result) {
         return res.status(404).json({ error: "Result not found" });
       }
-      
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role !== "admin") {
+        const userSubjects = await storage.getSubjectsByCreator(req.session.userId!);
+        const slugs = userSubjects.map(s => s.slug);
+        if (!slugs.includes(result.subject)) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
       res.json(result);
     } catch (error: any) {
       console.error("Error fetching result:", error);
@@ -517,11 +578,17 @@ export async function registerRoutes(
     }
   });
 
-  // Get results by subject
+  // Get results by subject (admin: any, user: own subjects only)
   app.get("/api/admin/results/subject/:subject", requireAuth, async (req, res) => {
     try {
-      const subject = req.params.subject;
-      const results = await storage.getVivaResultsBySubject(subject);
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role !== "admin") {
+        const subject = await storage.getSubjectBySlug(req.params.subject);
+        if (subject && subject.createdBy !== req.session.userId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+      const results = await storage.getVivaResultsBySubject(req.params.subject);
       res.json(results);
     } catch (error: any) {
       console.error("Error fetching results by subject:", error);

@@ -55,6 +55,7 @@ export const subjects = pgTable("subjects", {
     title: string;
     topics: string[];
   }>>(),
+  createdBy: varchar("created_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

@@ -46,12 +46,15 @@ Database tables:
 - `manualQuestions` - Manually added exam questions per subject
 - `session` - Express session store (auto-created by connect-pg-simple)
 
-### Authentication
+### Authentication & Authorization
 - Session-based authentication using `express-session` with `connect-pg-simple` for PostgreSQL session storage
 - Password hashing using Node.js `crypto.scryptSync` with random salt
 - Default admin user seeded on startup (username: `admin`, password: `admin123`)
-- Admin users can create/delete other users and reset passwords
-- All `/api/admin/*` routes protected with `requireAuth` middleware
+- Two roles: `admin` (full access) and `user` (scoped access)
+- **Admin role**: Can create/delete/manage all users, view all subjects, results, and questions
+- **User role**: Can only create/view/manage their own subjects and related results/questions; cannot see other users or their data
+- Subjects have a `createdBy` field linking to the user who created them
+- All `/api/admin/*` routes protected with `requireAuth` middleware; user management routes use `requireAdmin`
 - Student-facing viva routes (`/:subject`) do not require authentication
 
 ### AI Integration

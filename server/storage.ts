@@ -7,7 +7,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "../db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -26,9 +26,11 @@ export interface IStorage {
 
   createSubject(subject: InsertSubject): Promise<Subject>;
   getSubjects(): Promise<Subject[]>;
+  getSubjectsByCreator(userId: string): Promise<Subject[]>;
   getSubjectBySlug(slug: string): Promise<Subject | undefined>;
   updateSubject(id: number, subject: Partial<InsertSubject>): Promise<Subject | undefined>;
   deleteSubject(id: number): Promise<void>;
+  getVivaResultsBySubjectSlugs(slugs: string[]): Promise<VivaResult[]>;
 
   createManualQuestion(question: InsertManualQuestion): Promise<ManualQuestion>;
   getManualQuestionsBySubject(subjectSlug: string): Promise<ManualQuestion[]>;
@@ -96,6 +98,15 @@ export class DatabaseStorage implements IStorage {
 
   async getSubjects(): Promise<Subject[]> {
     return await db.select().from(subjects).orderBy(desc(subjects.createdAt));
+  }
+
+  async getSubjectsByCreator(userId: string): Promise<Subject[]> {
+    return await db.select().from(subjects).where(eq(subjects.createdBy, userId)).orderBy(desc(subjects.createdAt));
+  }
+
+  async getVivaResultsBySubjectSlugs(slugs: string[]): Promise<VivaResult[]> {
+    if (slugs.length === 0) return [];
+    return await db.select().from(vivaResults).where(inArray(vivaResults.subject, slugs)).orderBy(desc(vivaResults.timestamp));
   }
 
   async getSubjectBySlug(slug: string): Promise<Subject | undefined> {

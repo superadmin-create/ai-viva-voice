@@ -37,6 +37,7 @@ type Subject = {
   name: string;
   slug: string;
   isBuiltIn: boolean;
+  createdBy?: string | null;
 };
 
 type ManualQuestion = {
@@ -79,7 +80,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     },
   });
 
-  const { data: subjects } = useQuery<Subject[]>({
+  const { data: allSubjects } = useQuery<Subject[]>({
     queryKey: ["subjects"],
     queryFn: async () => {
       const response = await fetch("/api/subjects");
@@ -87,6 +88,11 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       return response.json();
     },
   });
+
+  const isAdmin = user.role === "admin";
+  const subjects = isAdmin
+    ? allSubjects
+    : allSubjects?.filter(s => s.createdBy === user.id || s.isBuiltIn);
 
   const { data: questions } = useQuery<ManualQuestion[]>({
     queryKey: ["questions", selectedSubjectSlug],
@@ -264,9 +270,11 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
         <div className="mb-8 flex items-start justify-between">
           <div>
             <h1 className="text-5xl font-bold mb-2 bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent" data-testid="heading-admin">
-              Admin Dashboard
+              {isAdmin ? "Admin Dashboard" : "Dashboard"}
             </h1>
-            <p className="text-muted-foreground text-lg">Monitor and manage mock viva examinations</p>
+            <p className="text-muted-foreground text-lg">
+              {isAdmin ? "Monitor and manage mock viva examinations" : "Manage your subjects and view examination results"}
+            </p>
             <p className="text-sm text-muted-foreground mt-1">
               Results are automatically saved to Google Sheet: <strong>AI Viva Results</strong>
             </p>
@@ -438,7 +446,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                           <ExternalLink className="h-4 w-4 mr-1" />
                           Open
                         </Button>
-                        {!subject.isBuiltIn && subject.id && (
+                        {!subject.isBuiltIn && subject.id && (isAdmin || subject.createdBy === user.id) && (
                           <Button
                             variant="destructive"
                             size="sm"
@@ -471,7 +479,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                     data-testid="select-subject"
                   >
                     <option value="">Choose a subject...</option>
-                    {subjects?.map((s) => (
+                    {subjects?.filter(s => isAdmin || s.createdBy === user.id).map((s) => (
                       <option key={s.slug} value={s.slug}>{s.name}</option>
                     ))}
                   </select>
