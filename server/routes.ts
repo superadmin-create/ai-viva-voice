@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { type Server } from "http";
 import { storage } from "./storage";
 import { insertVivaResultSchema, insertSubjectSchema, insertManualQuestionSchema } from "@shared/schema";
@@ -6,12 +6,156 @@ import { generateVivaQuestions, evaluateAnswer, textToSpeech } from "./lib/opena
 import { syncVivaResultToSheet } from "./lib/google-sheets-service";
 import { getAllSubjects, getSubjectContent } from "./lib/subject-content";
 import { z } from "zod";
+import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
+
+declare module "express-session" {
+  interface SessionData {
+    userId: string;
+  }
+}
+
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  const [salt, hash] = stored.split(":");
+  const hashBuffer = Buffer.from(hash, "hex");
+  const derivedHash = scryptSync(password, salt, 64);
+  return timingSafeEqual(hashBuffer, derivedHash);
+}
+
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  next();
+}
+
+async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  const user = await storage.getUser(req.session.userId);
+  if (!user || user.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
+}
+
+async function seedDefaultAdmin() {
+  const existing = await storage.getUserByUsername("admin");
+  if (!existing) {
+    await storage.createUser({
+      username: "admin",
+      password: hashPassword("admin123"),
+      role: "admin",
+    });
+    console.log("Default admin user created (username: admin, password: admin123)");
+  }
+}
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
+
+  await seedDefaultAdmin();
+
+  // Auth routes
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username and password are required" });
+      }
+      const user = await storage.getUserByUsername(username);
+      if (!user || !verifyPassword(password, user.password)) {
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+      req.session.userId = user.id;
+      res.json({ id: user.id, username: user.username, role: user.role });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) return res.status(500).json({ error: "Logout failed" });
+      res.json({ success: true });
+    });
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    const user = await storage.getUser(req.session.userId);
+    if (!user) {
+      return res.status(401).json({ error: "User not found" });
+    }
+    res.json({ id: user.id, username: user.username, role: user.role });
+  });
+
+  // User management routes (admin only)
+  app.get("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      res.json(allUsers.map(u => ({ id: u.id, username: u.username, role: u.role })));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const { username, password, role } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username and password are required" });
+      }
+      const existing = await storage.getUserByUsername(username);
+      if (existing) {
+        return res.status(400).json({ error: "Username already exists" });
+      }
+      const user = await storage.createUser({
+        username,
+        password: hashPassword(password),
+        role: role || "admin",
+      });
+      res.json({ id: user.id, username: user.username, role: user.role });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to create user" });
+    }
+  });
+
+  app.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      if (req.params.id === req.session.userId) {
+        return res.status(400).json({ error: "Cannot delete your own account" });
+      }
+      await storage.deleteUser(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to delete user" });
+    }
+  });
+
+  app.put("/api/admin/users/:id/password", requireAdmin, async (req, res) => {
+    try {
+      const { password } = req.body;
+      if (!password) {
+        return res.status(400).json({ error: "Password is required" });
+      }
+      await storage.updateUserPassword(req.params.id, hashPassword(password));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to update password" });
+    }
+  });
+
   // Get list of available subjects (combines built-in and custom)
   app.get("/api/subjects", async (req, res) => {
     try {
@@ -64,7 +208,7 @@ export async function registerRoutes(
   });
 
   // Create a new custom subject
-  app.post("/api/admin/subjects", async (req, res) => {
+  app.post("/api/admin/subjects", requireAdmin, async (req, res) => {
     try {
       const validatedData = insertSubjectSchema.parse(req.body);
       const subject = await storage.createSubject(validatedData);
@@ -79,7 +223,7 @@ export async function registerRoutes(
   });
 
   // Update a custom subject
-  app.put("/api/admin/subjects/:id", async (req, res) => {
+  app.put("/api/admin/subjects/:id", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -97,7 +241,7 @@ export async function registerRoutes(
   });
 
   // Delete a custom subject
-  app.delete("/api/admin/subjects/:id", async (req, res) => {
+  app.delete("/api/admin/subjects/:id", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -112,7 +256,7 @@ export async function registerRoutes(
   });
 
   // Get manual questions for a subject
-  app.get("/api/admin/subjects/:slug/questions", async (req, res) => {
+  app.get("/api/admin/subjects/:slug/questions", requireAdmin, async (req, res) => {
     try {
       const questions = await storage.getManualQuestionsBySubject(req.params.slug);
       res.json(questions);
@@ -123,7 +267,7 @@ export async function registerRoutes(
   });
 
   // Add a manual question
-  app.post("/api/admin/questions", async (req, res) => {
+  app.post("/api/admin/questions", requireAdmin, async (req, res) => {
     try {
       const validatedData = insertManualQuestionSchema.parse(req.body);
       const question = await storage.createManualQuestion(validatedData);
@@ -138,7 +282,7 @@ export async function registerRoutes(
   });
 
   // Delete a manual question
-  app.delete("/api/admin/questions/:id", async (req, res) => {
+  app.delete("/api/admin/questions/:id", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -341,7 +485,7 @@ export async function registerRoutes(
   });
 
   // Get all viva results (admin only)
-  app.get("/api/admin/results", async (req, res) => {
+  app.get("/api/admin/results", requireAuth, async (req, res) => {
     try {
       const results = await storage.getVivaResults();
       res.json(results);
@@ -352,7 +496,7 @@ export async function registerRoutes(
   });
 
   // Get viva result by ID (admin only)
-  app.get("/api/admin/results/:id", async (req, res) => {
+  app.get("/api/admin/results/:id", requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       
@@ -374,7 +518,7 @@ export async function registerRoutes(
   });
 
   // Get results by subject
-  app.get("/api/admin/results/subject/:subject", async (req, res) => {
+  app.get("/api/admin/results/subject/:subject", requireAuth, async (req, res) => {
     try {
       const subject = req.params.subject;
       const results = await storage.getVivaResultsBySubject(subject);

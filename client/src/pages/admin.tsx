@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink } from "lucide-react";
+import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -46,14 +46,29 @@ type ManualQuestion = {
   createdAt: string;
 };
 
-export default function AdminPanel() {
+type AdminUser = {
+  id: string;
+  username: string;
+  role: string;
+};
+
+type AdminPanelProps = {
+  user: AdminUser;
+  onLogout: () => void;
+};
+
+export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const queryClient = useQueryClient();
   const [selectedResult, setSelectedResult] = useState<VivaResult | null>(null);
   const [showSubjectDialog, setShowSubjectDialog] = useState(false);
   const [showQuestionDialog, setShowQuestionDialog] = useState(false);
+  const [showUserDialog, setShowUserDialog] = useState(false);
+  const [showResetPasswordDialog, setShowResetPasswordDialog] = useState<string | null>(null);
   const [selectedSubjectSlug, setSelectedSubjectSlug] = useState<string | null>(null);
   const [newSubject, setNewSubject] = useState({ name: "", slug: "", curriculum: "" });
   const [newQuestion, setNewQuestion] = useState("");
+  const [newUser, setNewUser] = useState({ username: "", password: "", role: "admin" });
+  const [resetPassword, setResetPassword] = useState("");
 
   const { data: results, isLoading } = useQuery<VivaResult[]>({
     queryKey: ["admin-results"],
@@ -147,6 +162,78 @@ export default function AdminPanel() {
     },
   });
 
+  const { data: adminUsers } = useQuery<AdminUser[]>({
+    queryKey: ["admin-users"],
+    queryFn: async () => {
+      const response = await fetch("/api/admin/users");
+      if (!response.ok) throw new Error("Failed to fetch users");
+      return response.json();
+    },
+    enabled: user.role === "admin",
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (data: { username: string; password: string; role: string }) => {
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Failed to create user");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast.success("User created successfully!");
+      setShowUserDialog(false);
+      setNewUser({ username: "", password: "", role: "admin" });
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Failed to delete user");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast.success("User deleted!");
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ id, password }: { id: string; password: string }) => {
+      const response = await fetch(`/api/admin/users/${id}/password`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!response.ok) throw new Error("Failed to reset password");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast.success("Password reset successfully!");
+      setShowResetPasswordDialog(null);
+      setResetPassword("");
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
   const handleCreateSubject = () => {
     try {
       const curriculum = newSubject.curriculum.trim() 
@@ -174,14 +261,29 @@ export default function AdminPanel() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-slate-50">
       <div className="container mx-auto p-6 max-w-7xl">
-        <div className="mb-8">
-          <h1 className="text-5xl font-bold mb-2 bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent" data-testid="heading-admin">
-            Admin Dashboard
-          </h1>
-          <p className="text-muted-foreground text-lg">Monitor and manage mock viva examinations</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Results are automatically saved to Google Sheet: <strong>AI Viva Results</strong>
-          </p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-5xl font-bold mb-2 bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent" data-testid="heading-admin">
+              Admin Dashboard
+            </h1>
+            <p className="text-muted-foreground text-lg">Monitor and manage mock viva examinations</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Results are automatically saved to Google Sheet: <strong>AI Viva Results</strong>
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <p className="text-sm font-medium" data-testid="text-username">{user.username}</p>
+              <Badge variant="secondary" className="text-xs">
+                <Shield className="h-3 w-3 mr-1" />
+                {user.role}
+              </Badge>
+            </div>
+            <Button variant="outline" size="sm" onClick={onLogout} data-testid="button-logout">
+              <LogOut className="h-4 w-4 mr-1" />
+              Sign Out
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -221,6 +323,9 @@ export default function AdminPanel() {
             <TabsTrigger value="results">Examination Results</TabsTrigger>
             <TabsTrigger value="subjects">Manage Subjects</TabsTrigger>
             <TabsTrigger value="questions">Manage Questions</TabsTrigger>
+            {user.role === "admin" && (
+              <TabsTrigger value="users">Manage Users</TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="results">
@@ -407,6 +512,70 @@ export default function AdminPanel() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {user.role === "admin" && (
+            <TabsContent value="users">
+              <Card className="border-2">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Manage Users</CardTitle>
+                    <CardDescription>Create and manage admin users</CardDescription>
+                  </div>
+                  <Button onClick={() => setShowUserDialog(true)} data-testid="button-add-user">
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Add User
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {adminUsers?.map((u) => (
+                      <div key={u.id} className="flex items-center justify-between p-4 border rounded-lg" data-testid={`row-user-${u.id}`}>
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-violet-100 rounded-full flex items-center justify-center">
+                            <Users className="h-5 w-5 text-violet-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{u.username}</p>
+                            <Badge variant="secondary" className="text-xs mt-1">
+                              <Shield className="h-3 w-3 mr-1" />
+                              {u.role}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setShowResetPasswordDialog(u.id);
+                              setResetPassword("");
+                            }}
+                            data-testid={`button-reset-password-${u.id}`}
+                          >
+                            <Key className="h-4 w-4 mr-1" />
+                            Reset Password
+                          </Button>
+                          {u.id !== user.id && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => deleteUserMutation.mutate(u.id)}
+                              data-testid={`button-delete-user-${u.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {(!adminUsers || adminUsers.length === 0) && (
+                      <p className="text-muted-foreground text-center py-8">No users found</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 
@@ -556,6 +725,91 @@ export default function AdminPanel() {
               disabled={!newQuestion.trim()}
             >
               Add Question
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add User Dialog */}
+      <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New User</DialogTitle>
+            <DialogDescription>Create a new admin user account</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Username</Label>
+              <Input
+                placeholder="Enter username"
+                value={newUser.username}
+                onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                data-testid="input-new-username"
+              />
+            </div>
+            <div>
+              <Label>Password</Label>
+              <Input
+                type="password"
+                placeholder="Enter password"
+                value={newUser.password}
+                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                data-testid="input-new-password"
+              />
+            </div>
+            <div>
+              <Label>Role</Label>
+              <select
+                className="w-full mt-2 p-2 border rounded-lg"
+                value={newUser.role}
+                onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                data-testid="select-user-role"
+              >
+                <option value="admin">Admin</option>
+                <option value="viewer">Viewer</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUserDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => createUserMutation.mutate(newUser)}
+              disabled={!newUser.username.trim() || !newUser.password.trim()}
+              data-testid="button-create-user"
+            >
+              Create User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!showResetPasswordDialog} onOpenChange={() => setShowResetPasswordDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>Set a new password for this user</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>New Password</Label>
+              <Input
+                type="password"
+                placeholder="Enter new password"
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                data-testid="input-reset-password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetPasswordDialog(null)}>Cancel</Button>
+            <Button
+              onClick={() => showResetPasswordDialog && resetPasswordMutation.mutate({ id: showResetPasswordDialog, password: resetPassword })}
+              disabled={!resetPassword.trim()}
+              data-testid="button-confirm-reset"
+            >
+              Reset Password
             </Button>
           </DialogFooter>
         </DialogContent>

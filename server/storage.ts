@@ -13,6 +13,9 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  getAllUsers(): Promise<User[]>;
+  deleteUser(id: string): Promise<void>;
+  updateUserPassword(id: string, password: string): Promise<void>;
   
   createVivaResult(result: InsertVivaResult): Promise<VivaResult>;
   getVivaResults(): Promise<VivaResult[]>;
@@ -46,6 +49,18 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const result = await db.insert(users).values(insertUser).returning();
     return result[0];
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  async updateUserPassword(id: string, password: string): Promise<void> {
+    await db.update(users).set({ password }).where(eq(users.id, id));
   }
 
   async createVivaResult(result: InsertVivaResult): Promise<VivaResult> {

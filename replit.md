@@ -17,9 +17,10 @@ Preferred communication style: Simple, everyday language.
 - **Styling**: Tailwind CSS with shadcn/ui component library (New York style variant)
 - **Build Tool**: Vite with custom plugins for Replit integration
 
-The frontend has two main pages:
-1. Admin panel (`/`) - View exam results, manage subjects, add manual questions
-2. Viva page (`/:subject`) - Student-facing exam interface with voice input/output
+The frontend has three main pages:
+1. Login page (`/`) - Shown when not authenticated, allows admin login
+2. Admin panel (`/`) - View exam results, manage subjects, questions, and users (requires login)
+3. Viva page (`/:subject`) - Student-facing exam interface with voice input/output (no auth required)
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express
@@ -39,10 +40,19 @@ Key server components:
 - **Migrations**: Managed via `drizzle-kit push`
 
 Database tables:
-- `users` - User accounts (id, username, password)
+- `users` - User accounts (id, username, password, role) with session-based auth
 - `viva_results` - Exam results with transcripts and scores
 - `subjects` - Custom subjects created by admins
 - `manualQuestions` - Manually added exam questions per subject
+- `session` - Express session store (auto-created by connect-pg-simple)
+
+### Authentication
+- Session-based authentication using `express-session` with `connect-pg-simple` for PostgreSQL session storage
+- Password hashing using Node.js `crypto.scryptSync` with random salt
+- Default admin user seeded on startup (username: `admin`, password: `admin123`)
+- Admin users can create/delete other users and reset passwords
+- All `/api/admin/*` routes protected with `requireAuth` middleware
+- Student-facing viva routes (`/:subject`) do not require authentication
 
 ### AI Integration
 - **Provider**: OpenAI (GPT-5)
