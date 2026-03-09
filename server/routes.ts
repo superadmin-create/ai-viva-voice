@@ -318,6 +318,32 @@ export async function registerRoutes(
     }
   });
 
+  // Add multiple manual questions at once
+  app.post("/api/admin/questions/bulk", requireAuth, async (req, res) => {
+    try {
+      const { subjectSlug, questions } = req.body;
+      if (!subjectSlug || !Array.isArray(questions) || questions.length === 0) {
+        return res.status(400).json({ error: "subjectSlug and questions array are required" });
+      }
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role !== "admin") {
+        const subject = await storage.getSubjectBySlug(subjectSlug);
+        if (subject && subject.createdBy !== req.session.userId) {
+          return res.status(403).json({ error: "You can only add questions to your own subjects" });
+        }
+      }
+      const created = await Promise.all(
+        questions.map((q: string) =>
+          storage.createManualQuestion({ subjectSlug, questionText: q.trim() })
+        )
+      );
+      res.json({ count: created.length, questions: created });
+    } catch (error: any) {
+      console.error("Error creating bulk questions:", error);
+      res.status(500).json({ error: error.message || "Failed to create questions" });
+    }
+  });
+
   // Delete a manual question (admin: any, user: own subjects only)
   app.delete("/api/admin/questions/:id", requireAuth, async (req, res) => {
     try {

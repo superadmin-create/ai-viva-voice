@@ -156,6 +156,27 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     },
   });
 
+  const bulkCreateQuestionsMutation = useMutation({
+    mutationFn: async (data: { subjectSlug: string; questions: string[] }) => {
+      const response = await fetch("/api/admin/questions/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error("Failed to create questions");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["questions", selectedSubjectSlug] });
+      toast.success(`${data.count} questions added!`);
+      setNewQuestion("");
+      setShowQuestionDialog(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
   const deleteQuestionMutation = useMutation({
     mutationFn: async (id: number) => {
       const response = await fetch(`/api/admin/questions/${id}`, { method: "DELETE" });
@@ -718,41 +739,64 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
 
       {/* Add Question Dialog */}
       <Dialog open={showQuestionDialog} onOpenChange={setShowQuestionDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Add Manual Question</DialogTitle>
-            <DialogDescription>This question will be used instead of AI-generated ones</DialogDescription>
+            <DialogTitle>Add Manual Questions</DialogTitle>
+            <DialogDescription>Add one or multiple questions at once. These will be used instead of AI-generated ones.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Question Text</Label>
+              <Label>Questions</Label>
               <Textarea
-                placeholder={"e.g., Explain the difference between a stack and a queue, including their time complexities for insertion and deletion operations."}
+                placeholder={"Enter one question per line, e.g.:\n\nWhat is polymorphism in OOP? Give an example.\nDescribe the process of photosynthesis and explain its importance.\nCompare and contrast TCP and UDP protocols."}
                 value={newQuestion}
                 onChange={(e) => setNewQuestion(e.target.value)}
-                className="min-h-[100px]"
+                className="min-h-[180px] font-mono text-sm"
                 data-testid="input-question-text"
               />
-              <p className="text-xs text-muted-foreground mt-2">
-                Write a clear, open-ended question that a student would answer verbally. One question per submission. Example formats:
-              </p>
-              <ul className="text-xs text-muted-foreground mt-1 list-disc list-inside space-y-0.5">
-                <li>"What is polymorphism in object-oriented programming? Give an example."</li>
-                <li>"Describe the process of photosynthesis and explain its importance."</li>
-                <li>"Compare and contrast TCP and UDP protocols."</li>
-              </ul>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-muted-foreground">
+                  Put each question on a separate line. Empty lines will be ignored.
+                </p>
+                {newQuestion.trim() && (
+                  <Badge variant="secondary" className="text-xs">
+                    {newQuestion.split('\n').filter(l => l.trim()).length} question{newQuestion.split('\n').filter(l => l.trim()).length !== 1 ? 's' : ''}
+                  </Badge>
+                )}
+              </div>
+              <div className="mt-3 p-3 bg-muted/50 rounded-lg">
+                <p className="text-xs font-medium mb-1">Example format:</p>
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap">What is polymorphism in OOP? Give an example.{'\n'}Describe the process of photosynthesis.{'\n'}Compare and contrast TCP and UDP protocols.</pre>
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowQuestionDialog(false)}>Cancel</Button>
             <Button 
-              onClick={() => selectedSubjectSlug && createQuestionMutation.mutate({ 
-                subjectSlug: selectedSubjectSlug, 
-                questionText: newQuestion 
-              })}
-              disabled={!newQuestion.trim()}
+              onClick={() => {
+                if (!selectedSubjectSlug) return;
+                const lines = newQuestion.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                if (lines.length === 1) {
+                  createQuestionMutation.mutate({
+                    subjectSlug: selectedSubjectSlug,
+                    questionText: lines[0],
+                  });
+                } else if (lines.length > 1) {
+                  bulkCreateQuestionsMutation.mutate({
+                    subjectSlug: selectedSubjectSlug,
+                    questions: lines,
+                  });
+                }
+              }}
+              disabled={!newQuestion.trim() || bulkCreateQuestionsMutation.isPending || createQuestionMutation.isPending}
+              data-testid="button-submit-questions"
             >
-              Add Question
+              {(bulkCreateQuestionsMutation.isPending || createQuestionMutation.isPending) && (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              )}
+              {newQuestion.split('\n').filter(l => l.trim()).length > 1
+                ? `Add ${newQuestion.split('\n').filter(l => l.trim()).length} Questions`
+                : "Add Question"}
             </Button>
           </DialogFooter>
         </DialogContent>
