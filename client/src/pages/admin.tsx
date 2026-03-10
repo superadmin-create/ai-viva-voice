@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy, Upload, FileText, Filter, X } from "lucide-react";
+import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy, Upload, FileText, Filter, X, Download } from "lucide-react";
 import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -365,6 +365,47 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     return true;
   });
 
+  const exportToExcel = () => {
+    if (filteredResults.length === 0) {
+      toast.error("No results to export");
+      return;
+    }
+    const escCsv = (val: string) => {
+      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+        return `"${val.replace(/"/g, '""')}"`;
+      }
+      return val;
+    };
+    const headers = ["Name", "Email", "Phone", "Class", "Division", "Subject", "Score", "Max Score", "Score %", "Date", "Questions & Answers"];
+    const rows = filteredResults.map(r => {
+      const transcript = r.transcript.map((t, i) =>
+        `Q${i + 1}: ${t.question} | A: ${t.answer} | Score: ${t.score} | Feedback: ${t.feedback}`
+      ).join(' || ');
+      return [
+        escCsv(r.studentName),
+        escCsv(r.studentEmail),
+        escCsv(r.studentPhone),
+        escCsv(r.studentClass || ''),
+        escCsv(r.studentDivision || ''),
+        escCsv(r.subject),
+        String(r.score),
+        String(r.maxScore),
+        ((r.score / r.maxScore) * 100).toFixed(1),
+        new Date(r.timestamp).toLocaleDateString(),
+        escCsv(transcript),
+      ].join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `viva-results-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${filteredResults.length} results`);
+  };
+
   const stats = {
     total: results?.length || 0,
     avgScore: results && results.length > 0
@@ -504,11 +545,23 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                       data-testid="filter-date"
                     />
                   </div>
-                  {hasActiveFilters && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Showing {filteredResults.length} of {results?.length || 0} results
-                    </p>
-                  )}
+                  <div className="flex items-center justify-between mt-2">
+                    {hasActiveFilters ? (
+                      <p className="text-xs text-muted-foreground">
+                        Showing {filteredResults.length} of {results?.length || 0} results
+                      </p>
+                    ) : <span />}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={exportToExcel}
+                      disabled={filteredResults.length === 0}
+                      data-testid="button-export-excel"
+                    >
+                      <Download className="h-4 w-4 mr-1" />
+                      Export to Excel
+                    </Button>
+                  </div>
                 </div>
 
                 {isLoading ? (
