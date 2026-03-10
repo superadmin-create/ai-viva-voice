@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy, Upload, FileText } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -70,6 +70,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [newQuestion, setNewQuestion] = useState("");
   const [newUser, setNewUser] = useState({ username: "", password: "", role: "admin" });
   const [resetPassword, setResetPassword] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: results, isLoading } = useQuery<VivaResult[]>({
     queryKey: ["admin-results"],
@@ -623,31 +624,38 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                           </h3>
                           <p className="text-sm text-muted-foreground">Upload PDF or DOCX files. The AI will use their content to generate and evaluate questions.</p>
                         </div>
-                        <label>
+                        <div>
                           <input
+                            ref={fileInputRef}
                             type="file"
+                            multiple
                             accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                             className="hidden"
                             data-testid="input-document-upload"
                             onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file && selectedSubjectSlug) {
-                                uploadDocumentMutation.mutate({ subjectSlug: selectedSubjectSlug, file });
+                              const files = e.target.files;
+                              if (files && files.length > 0 && selectedSubjectSlug) {
+                                Array.from(files).forEach(file => {
+                                  uploadDocumentMutation.mutate({ subjectSlug: selectedSubjectSlug, file });
+                                });
                               }
                               e.target.value = '';
                             }}
                           />
-                          <Button asChild size="sm" disabled={uploadDocumentMutation.isPending} data-testid="button-upload-document">
-                            <span>
-                              {uploadDocumentMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                              ) : (
-                                <Upload className="h-4 w-4 mr-1" />
-                              )}
-                              Upload File
-                            </span>
+                          <Button
+                            size="sm"
+                            disabled={uploadDocumentMutation.isPending}
+                            data-testid="button-upload-document"
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            {uploadDocumentMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <Upload className="h-4 w-4 mr-1" />
+                            )}
+                            Upload Files
                           </Button>
-                        </label>
+                        </div>
                       </div>
 
                       <div className="space-y-2">
