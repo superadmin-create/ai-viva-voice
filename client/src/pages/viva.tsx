@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Mic, Volume2, CheckCircle2, User, Mail, Phone, ArrowLeft, Clock } from "lucide-react";
+import { Loader2, Mic, Volume2, CheckCircle2, User, Mail, Phone, ArrowLeft, Clock, GraduationCap, Users } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -29,7 +29,7 @@ export default function VivaPage() {
   const subject = params?.subject || "";
 
   const [step, setStep] = useState<"register" | "preparing" | "exam" | "completed">("register");
-  const [studentInfo, setStudentInfo] = useState({ name: "", email: "", phone: "" });
+  const [studentInfo, setStudentInfo] = useState({ name: "", email: "", phone: "", studentClass: "", division: "" });
   
   const [questions, setQuestions] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -110,6 +110,8 @@ export default function VivaPage() {
         studentName: studentInfo.name,
         studentEmail: studentInfo.email,
         studentPhone: studentInfo.phone,
+        studentClass: studentInfo.studentClass,
+        studentDivision: studentInfo.division,
         subject,
         rawAnswers: rawAnswersRef.current,
       });
@@ -304,7 +306,7 @@ export default function VivaPage() {
   }, []);
 
   const startExam = async () => {
-    if (!studentInfo.name || !studentInfo.email || !studentInfo.phone) {
+    if (!studentInfo.name || !studentInfo.email || !studentInfo.phone || !studentInfo.studentClass || !studentInfo.division) {
       toast.error("Please fill in all fields");
       return;
     }
@@ -388,6 +390,34 @@ export default function VivaPage() {
                   className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500"
                   data-testid="input-phone"
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="studentClass" className="text-zinc-300 flex items-center gap-2 text-sm">
+                    <GraduationCap className="h-3.5 w-3.5" /> Class
+                  </Label>
+                  <Input
+                    id="studentClass"
+                    placeholder="e.g., FY BMS"
+                    value={studentInfo.studentClass}
+                    onChange={(e) => setStudentInfo({ ...studentInfo, studentClass: e.target.value })}
+                    className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500"
+                    data-testid="input-class"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="division" className="text-zinc-300 flex items-center gap-2 text-sm">
+                    <Users className="h-3.5 w-3.5" /> Division
+                  </Label>
+                  <Input
+                    id="division"
+                    placeholder="e.g., A"
+                    value={studentInfo.division}
+                    onChange={(e) => setStudentInfo({ ...studentInfo, division: e.target.value })}
+                    className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500"
+                    data-testid="input-division"
+                  />
+                </div>
               </div>
             </div>
             <Button

@@ -18,6 +18,8 @@ type VivaResult = {
   studentName: string;
   studentEmail: string;
   studentPhone: string;
+  studentClass: string;
+  studentDivision: string;
   subject: string;
   score: number;
   maxScore: number;
@@ -459,6 +461,11 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                               <div>
                                 <div className="font-medium">{result.studentName}</div>
                                 <div className="text-sm text-muted-foreground">{result.studentEmail}</div>
+                                {(result.studentClass || result.studentDivision) && (
+                                  <div className="text-xs text-muted-foreground mt-0.5">
+                                    {result.studentClass}{result.studentClass && result.studentDivision ? ' · ' : ''}{result.studentDivision}
+                                  </div>
+                                )}
                               </div>
                             </TableCell>
                             <TableCell>
@@ -781,6 +788,14 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                 <div>
                   <p className="text-sm text-muted-foreground">Phone</p>
                   <p className="font-medium">{selectedResult.studentPhone}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Class</p>
+                  <p className="font-medium">{selectedResult.studentClass || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Division</p>
+                  <p className="font-medium">{selectedResult.studentDivision || "—"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Subject</p>

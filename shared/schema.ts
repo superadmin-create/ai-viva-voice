@@ -24,7 +24,6 @@ export const vivaResults = pgTable("viva_results", {
   studentName: text("student_name").notNull(),
   studentEmail: text("student_email").notNull(),
   studentPhone: text("student_phone").notNull(),
-  studentCollege: text("student_college").notNull().default(""),
   studentClass: text("student_class").notNull().default(""),
   studentDivision: text("student_division").notNull().default(""),
   subject: text("subject").notNull(),
