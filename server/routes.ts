@@ -404,8 +404,10 @@ export async function registerRoutes(
 
       let extractedText = "";
       if (file.mimetype === 'application/pdf') {
-        const pdfData = await PDFParse(file.buffer);
-        extractedText = pdfData.text;
+        const parser = new PDFParse({ data: new Uint8Array(file.buffer), verbosity: 0 });
+        await parser.load();
+        extractedText = await parser.getText();
+        parser.destroy();
       } else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         const result = await mammoth.extractRawText({ buffer: file.buffer });
         extractedText = result.value;
