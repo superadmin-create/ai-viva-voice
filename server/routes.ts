@@ -7,6 +7,20 @@ import { syncVivaResultToSheet } from "./lib/google-sheets-service";
 import { getAllSubjects, getSubjectContent } from "./lib/subject-content";
 import { z } from "zod";
 import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
+import multer from "multer";
+import mammoth from "mammoth";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
+
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    cb(null, allowed.includes(file.mimetype));
+  }
+});
 
 declare module "express-session" {
   interface SessionData {
@@ -369,6 +383,94 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error deleting question:", error);
       res.status(500).json({ error: error.message || "Failed to delete question" });
+    }
+  });
+
+  // Upload document for a subject
+  app.post("/api/admin/documents", requireAuth, upload.single('file'), async (req: any, res) => {
+    try {
+      const file = req.file;
+      const { subjectSlug } = req.body;
+      if (!file || !subjectSlug) {
+        return res.status(400).json({ error: "File and subjectSlug are required" });
+      }
+
+      const subject = await storage.getSubjectBySlug(subjectSlug);
+      if (!subject) {
+        return res.status(404).json({ error: "Subject not found. Documents can only be uploaded to existing custom subjects." });
+      }
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role !== "admin" && subject.createdBy !== req.session.userId) {
+        return res.status(403).json({ error: "You can only upload documents to your own subjects" });
+      }
+
+      let extractedText = "";
+      if (file.mimetype === 'application/pdf') {
+        const pdfData = await pdfParse(file.buffer);
+        extractedText = pdfData.text;
+      } else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        const result = await mammoth.extractRawText({ buffer: file.buffer });
+        extractedText = result.value;
+      }
+
+      if (!extractedText.trim()) {
+        return res.status(400).json({ error: "Could not extract text from the uploaded file" });
+      }
+
+      const fileData = file.buffer.toString('base64');
+      const doc = await storage.createSubjectDocument({
+        subjectSlug,
+        fileName: file.originalname,
+        fileType: file.mimetype,
+        fileData,
+        extractedText,
+      });
+
+      res.json({ id: doc.id, fileName: doc.fileName, fileType: doc.fileType, createdAt: doc.createdAt, textLength: extractedText.length });
+    } catch (error: any) {
+      console.error("Error uploading document:", error);
+      res.status(500).json({ error: error.message || "Failed to upload document" });
+    }
+  });
+
+  // Get documents for a subject
+  app.get("/api/admin/documents/:subjectSlug", requireAuth, async (req, res) => {
+    try {
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role !== "admin") {
+        const subject = await storage.getSubjectBySlug(req.params.subjectSlug);
+        if (subject && subject.createdBy !== req.session.userId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+      const docs = await storage.getDocumentsBySubject(req.params.subjectSlug);
+      res.json(docs.map(d => ({ id: d.id, fileName: d.fileName, fileType: d.fileType, subjectSlug: d.subjectSlug, createdAt: d.createdAt, textLength: d.extractedText.length })));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to fetch documents" });
+    }
+  });
+
+  // Delete a document
+  app.delete("/api/admin/documents/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+
+      const doc = await storage.getSubjectDocument(id);
+      if (!doc) return res.status(404).json({ error: "Document not found" });
+
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role !== "admin") {
+        const subject = await storage.getSubjectBySlug(doc.subjectSlug);
+        if (!subject || subject.createdBy !== req.session.userId) {
+          return res.status(403).json({ error: "You can only delete documents from your own subjects" });
+        }
+      }
+
+      await storage.deleteSubjectDocument(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to delete document" });
     }
   });
 

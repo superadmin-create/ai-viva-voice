@@ -3,7 +3,8 @@ import {
   type VivaResult, type InsertVivaResult, 
   type Subject, type InsertSubject,
   type ManualQuestion, type InsertManualQuestion,
-  users, vivaResults, subjects, manualQuestions 
+  type SubjectDocument, type InsertSubjectDocument,
+  users, vivaResults, subjects, manualQuestions, subjectDocuments 
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "../db";
@@ -35,6 +36,11 @@ export interface IStorage {
   createManualQuestion(question: InsertManualQuestion): Promise<ManualQuestion>;
   getManualQuestionsBySubject(subjectSlug: string): Promise<ManualQuestion[]>;
   deleteManualQuestion(id: number): Promise<void>;
+
+  createSubjectDocument(doc: InsertSubjectDocument): Promise<SubjectDocument>;
+  getDocumentsBySubject(subjectSlug: string): Promise<SubjectDocument[]>;
+  deleteSubjectDocument(id: number): Promise<void>;
+  getSubjectDocument(id: number): Promise<SubjectDocument | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -134,6 +140,24 @@ export class DatabaseStorage implements IStorage {
 
   async deleteManualQuestion(id: number): Promise<void> {
     await db.delete(manualQuestions).where(eq(manualQuestions.id, id));
+  }
+
+  async createSubjectDocument(doc: InsertSubjectDocument): Promise<SubjectDocument> {
+    const result = await db.insert(subjectDocuments).values([doc as any]).returning();
+    return result[0];
+  }
+
+  async getDocumentsBySubject(subjectSlug: string): Promise<SubjectDocument[]> {
+    return await db.select().from(subjectDocuments).where(eq(subjectDocuments.subjectSlug, subjectSlug)).orderBy(desc(subjectDocuments.createdAt));
+  }
+
+  async deleteSubjectDocument(id: number): Promise<void> {
+    await db.delete(subjectDocuments).where(eq(subjectDocuments.id, id));
+  }
+
+  async getSubjectDocument(id: number): Promise<SubjectDocument | undefined> {
+    const result = await db.select().from(subjectDocuments).where(eq(subjectDocuments.id, id)).limit(1);
+    return result[0];
   }
 }
 

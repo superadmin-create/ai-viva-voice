@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy } from "lucide-react";
+import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy, Upload, FileText } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -103,6 +103,53 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       return response.json();
     },
     enabled: !!selectedSubjectSlug,
+  });
+
+  const { data: documents } = useQuery<Array<{ id: number; fileName: string; fileType: string; subjectSlug: string; createdAt: string; textLength: number }>>({
+    queryKey: ["documents", selectedSubjectSlug],
+    queryFn: async () => {
+      if (!selectedSubjectSlug) return [];
+      const response = await fetch(`/api/admin/documents/${selectedSubjectSlug}`);
+      if (!response.ok) throw new Error("Failed to fetch documents");
+      return response.json();
+    },
+    enabled: !!selectedSubjectSlug,
+  });
+
+  const uploadDocumentMutation = useMutation({
+    mutationFn: async (data: { subjectSlug: string; file: File }) => {
+      const formData = new FormData();
+      formData.append('file', data.file);
+      formData.append('subjectSlug', data.subjectSlug);
+      const response = await fetch("/api/admin/documents", {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Failed to upload document");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents", selectedSubjectSlug] });
+      toast.success("Document uploaded and processed!");
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/admin/documents/${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Failed to delete document");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents", selectedSubjectSlug] });
+      toast.success("Document deleted!");
+    },
   });
 
   const createSubjectMutation = useMutation({
@@ -565,6 +612,73 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                           No manual questions yet. AI will generate all questions.
                         </p>
                       )}
+                    </div>
+
+                    <div className="mt-8 pt-6 border-t">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="font-semibold flex items-center gap-2">
+                            <FileText className="h-4 w-4" />
+                            Reference Documents
+                          </h3>
+                          <p className="text-sm text-muted-foreground">Upload PDF or DOCX files. The AI will use their content to generate and evaluate questions.</p>
+                        </div>
+                        <label>
+                          <input
+                            type="file"
+                            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            className="hidden"
+                            data-testid="input-document-upload"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file && selectedSubjectSlug) {
+                                uploadDocumentMutation.mutate({ subjectSlug: selectedSubjectSlug, file });
+                              }
+                              e.target.value = '';
+                            }}
+                          />
+                          <Button asChild size="sm" disabled={uploadDocumentMutation.isPending} data-testid="button-upload-document">
+                            <span>
+                              {uploadDocumentMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4 mr-1" />
+                              )}
+                              Upload File
+                            </span>
+                          </Button>
+                        </label>
+                      </div>
+
+                      <div className="space-y-2">
+                        {documents && documents.length > 0 ? (
+                          documents.map((doc) => (
+                            <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`row-document-${doc.id}`}>
+                              <div className="flex items-center gap-3">
+                                <FileText className="h-5 w-5 text-violet-500" />
+                                <div>
+                                  <p className="font-medium text-sm">{doc.fileName}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {doc.fileType === 'application/pdf' ? 'PDF' : 'DOCX'} · {Math.round(doc.textLength / 1000)}k characters extracted
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteDocumentMutation.mutate(doc.id)}
+                                data-testid={`button-delete-document-${doc.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-muted-foreground text-center py-4 text-sm">
+                            No documents uploaded. Upload PDF or DOCX files to provide reference material for the AI.
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}

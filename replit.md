@@ -44,6 +44,7 @@ Database tables:
 - `viva_results` - Exam results with transcripts and scores
 - `subjects` - Custom subjects created by admins
 - `manualQuestions` - Manually added exam questions per subject
+- `subject_documents` - Uploaded PDF/DOCX files with extracted text for AI reference
 - `session` - Express session store (auto-created by connect-pg-simple)
 
 ### Authentication & Authorization
@@ -60,9 +61,10 @@ Database tables:
 ### AI Integration
 - **Provider**: OpenAI (GPT-5)
 - **Features**: 
-  - Dynamic question generation based on subject curriculum
-  - Answer evaluation with scoring and feedback
+  - Dynamic question generation based on subject curriculum and uploaded documents
+  - Answer evaluation with scoring and feedback, referencing uploaded document content
   - Text-to-speech for question delivery
+  - Document text extraction from PDF (pdf-parse) and DOCX (mammoth) files
 
 ### External Integrations
 - Google Sheets API for syncing exam results (via Replit connectors)
@@ -83,4 +85,7 @@ Database tables:
 - `express` / `express-session` - HTTP server and sessions
 - `zod` / `drizzle-zod` - Schema validation
 - `sonner` - Toast notifications
+- `multer` - File upload handling
+- `pdf-parse` - PDF text extraction
+- `mammoth` - DOCX text extraction
 - Radix UI primitives - Accessible UI components via shadcn/ui

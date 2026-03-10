@@ -82,3 +82,21 @@ export const insertManualQuestionSchema = createInsertSchema(manualQuestions).om
 
 export type InsertManualQuestion = z.infer<typeof insertManualQuestionSchema>;
 export type ManualQuestion = typeof manualQuestions.$inferSelect;
+
+export const subjectDocuments = pgTable("subject_documents", {
+  id: serial("id").primaryKey(),
+  subjectSlug: text("subject_slug").notNull(),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").notNull(),
+  fileData: text("file_data").notNull(),
+  extractedText: text("extracted_text").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSubjectDocumentSchema = createInsertSchema(subjectDocuments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertSubjectDocument = z.infer<typeof insertSubjectDocumentSchema>;
+export type SubjectDocument = typeof subjectDocuments.$inferSelect;
