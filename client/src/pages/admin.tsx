@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy, Upload, FileText } from "lucide-react";
+import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy, Upload, FileText, Filter, X } from "lucide-react";
 import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -73,6 +73,10 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [newUser, setNewUser] = useState({ username: "", password: "", role: "admin" });
   const [resetPassword, setResetPassword] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [filterClass, setFilterClass] = useState("");
+  const [filterDivision, setFilterDivision] = useState("");
+  const [filterSubject, setFilterSubject] = useState("");
+  const [filterDate, setFilterDate] = useState("");
 
   const { data: results, isLoading } = useQuery<VivaResult[]>({
     queryKey: ["admin-results"],
@@ -345,6 +349,22 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     });
   };
 
+  const uniqueClasses = [...new Set((results || []).map(r => r.studentClass).filter(Boolean))].sort();
+  const uniqueDivisions = [...new Set((results || []).map(r => r.studentDivision).filter(Boolean))].sort();
+  const uniqueSubjectSlugs = [...new Set((results || []).map(r => r.subject))].sort();
+  const hasActiveFilters = filterClass || filterDivision || filterSubject || filterDate;
+
+  const filteredResults = (results || []).filter(r => {
+    if (filterClass && r.studentClass !== filterClass) return false;
+    if (filterDivision && r.studentDivision !== filterDivision) return false;
+    if (filterSubject && r.subject !== filterSubject) return false;
+    if (filterDate) {
+      const resultDate = new Date(r.timestamp).toISOString().split('T')[0];
+      if (resultDate !== filterDate) return false;
+    }
+    return true;
+  });
+
   const stats = {
     total: results?.length || 0,
     avgScore: results && results.length > 0
@@ -432,11 +452,70 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                 <CardDescription>All mock viva examination records</CardDescription>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 p-3 bg-muted/40 rounded-lg border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Filter className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Filters</span>
+                    {hasActiveFilters && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => { setFilterClass(""); setFilterDivision(""); setFilterSubject(""); setFilterDate(""); }}
+                        data-testid="button-clear-filters"
+                      >
+                        <X className="h-3 w-3 mr-1" /> Clear all
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <select
+                      value={filterClass}
+                      onChange={(e) => setFilterClass(e.target.value)}
+                      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      data-testid="filter-class"
+                    >
+                      <option value="">All Classes</option>
+                      {uniqueClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select
+                      value={filterDivision}
+                      onChange={(e) => setFilterDivision(e.target.value)}
+                      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      data-testid="filter-division"
+                    >
+                      <option value="">All Divisions</option>
+                      {uniqueDivisions.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <select
+                      value={filterSubject}
+                      onChange={(e) => setFilterSubject(e.target.value)}
+                      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      data-testid="filter-subject"
+                    >
+                      <option value="">All Subjects</option>
+                      {uniqueSubjectSlugs.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <Input
+                      type="date"
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                      className="h-9"
+                      data-testid="filter-date"
+                    />
+                  </div>
+                  {hasActiveFilters && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Showing {filteredResults.length} of {results?.length || 0} results
+                    </p>
+                  )}
+                </div>
+
                 {isLoading ? (
                   <div className="flex items-center justify-center py-12" data-testid="loading-results">
                     <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
                   </div>
-                ) : results && results.length > 0 ? (
+                ) : filteredResults.length > 0 ? (
                   <ScrollArea className="h-[500px]">
                     <Table>
                       <TableHeader>
@@ -450,7 +529,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {results.map((result) => (
+                        {filteredResults.map((result) => (
                           <TableRow
                             key={result.id}
                             className="cursor-pointer hover:bg-violet-50"
@@ -499,7 +578,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                   </ScrollArea>
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">
-                    No examination results yet
+                    {hasActiveFilters ? "No results match the selected filters" : "No examination results yet"}
                   </div>
                 )}
               </CardContent>
