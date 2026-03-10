@@ -9,9 +9,7 @@ import { z } from "zod";
 import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
 import multer from "multer";
 import mammoth from "mammoth";
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
+import { PDFParse } from "pdf-parse";
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -406,7 +404,7 @@ export async function registerRoutes(
 
       let extractedText = "";
       if (file.mimetype === 'application/pdf') {
-        const pdfData = await pdfParse(file.buffer);
+        const pdfData = await PDFParse(file.buffer);
         extractedText = pdfData.text;
       } else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         const result = await mammoth.extractRawText({ buffer: file.buffer });
