@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Mic, Volume2, CheckCircle2, User, Mail, Phone, ArrowLeft, Clock, GraduationCap, Users } from "lucide-react";
+import { Loader2, Mic, Volume2, CheckCircle2, User, Mail, Phone, ArrowLeft, Clock, GraduationCap, Users, ShieldCheck } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -28,8 +28,11 @@ export default function VivaPage() {
   const [, params] = useRoute("/:subject");
   const subject = params?.subject || "";
 
-  const [step, setStep] = useState<"register" | "preparing" | "exam" | "completed">("register");
+  const [step, setStep] = useState<"register" | "otp" | "preparing" | "exam" | "completed">("register");
   const [studentInfo, setStudentInfo] = useState({ name: "", email: "", phone: "", studentClass: "", division: "" });
+  const [otpValue, setOtpValue] = useState("");
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
   
   const [questions, setQuestions] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -305,22 +308,76 @@ export default function VivaPage() {
     });
   }, []);
 
-  const startExam = async () => {
+  const sendOtpToEmail = async () => {
     if (!studentInfo.name || !studentInfo.email || !studentInfo.phone || !studentInfo.studentClass || !studentInfo.division) {
       toast.error("Please fill in all fields");
       return;
     }
+    setOtpSending(true);
+    try {
+      const response = await fetch("/api/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: studentInfo.email }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to send OTP");
+      toast.success("OTP sent to your email!");
+      setStep("otp");
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setOtpSending(false);
+    }
+  };
 
-    rawAnswersRef.current = [];
-    setStep("preparing");
-    
-    const result = await generateQuestionsMutation.mutateAsync(subject);
-    setQuestions(result.questions);
-    setStep("exam");
+  const resendOtp = async () => {
+    setOtpSending(true);
+    try {
+      const response = await fetch("/api/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: studentInfo.email }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to send OTP");
+      toast.success("New OTP sent!");
+      setOtpValue("");
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setOtpSending(false);
+    }
+  };
 
-    if (result.questions.length > 0) {
-      await speakTextAsync(result.questions[0]);
-      startListeningWithSilenceDetection();
+  const verifyOtpAndStart = async () => {
+    if (!otpValue.trim()) {
+      toast.error("Please enter the OTP");
+      return;
+    }
+    setOtpVerifying(true);
+    try {
+      const response = await fetch("/api/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: studentInfo.email, otp: otpValue.trim() }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Invalid OTP");
+      toast.success("Email verified!");
+      rawAnswersRef.current = [];
+      setStep("preparing");
+      const result = await generateQuestionsMutation.mutateAsync(subject);
+      setQuestions(result.questions);
+      setStep("exam");
+      if (result.questions.length > 0) {
+        await speakTextAsync(result.questions[0]);
+        startListeningWithSilenceDetection();
+      }
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setOtpVerifying(false);
     }
   };
 
@@ -421,17 +478,84 @@ export default function VivaPage() {
               </div>
             </div>
             <Button
-              onClick={startExam}
+              onClick={sendOtpToEmail}
               className="w-full h-11 text-base bg-violet-600 hover:bg-violet-500 text-white"
-              disabled={generateQuestionsMutation.isPending}
+              disabled={otpSending}
               data-testid="button-start-exam"
             >
-              {generateQuestionsMutation.isPending ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Starting...</>
-              ) : "Start Exam"}
+              {otpSending ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending OTP...</>
+              ) : "Verify Email & Start"}
             </Button>
             <p className="text-xs text-zinc-500 text-center">
               Make sure your microphone is enabled
+            </p>
+          </CardContent>
+        </Card>
+        <audio ref={audioRef} hidden />
+      </div>
+    );
+  }
+
+  if (step === "otp") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center p-6">
+        <Card className="w-full max-w-md bg-zinc-800/50 border-zinc-700 backdrop-blur">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-violet-600/20 flex items-center justify-center mb-2">
+              <ShieldCheck className="h-6 w-6 text-violet-400" />
+            </div>
+            <CardTitle className="text-xl text-white" data-testid="text-otp-title">Verify Your Email</CardTitle>
+            <p className="text-sm text-zinc-400">
+              We've sent a 6-digit OTP to <span className="text-violet-400 font-medium">{studentInfo.email}</span>
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label className="text-zinc-300 text-sm">Enter OTP</Label>
+              <Input
+                value={otpValue}
+                onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="Enter 6-digit OTP"
+                className="bg-zinc-700/50 border-zinc-600 text-white text-center text-lg tracking-[0.5em] placeholder:tracking-normal placeholder:text-sm"
+                maxLength={6}
+                data-testid="input-otp"
+              />
+            </div>
+            <Button
+              onClick={verifyOtpAndStart}
+              className="w-full h-11 text-base bg-violet-600 hover:bg-violet-500 text-white"
+              disabled={otpVerifying || otpValue.length < 6}
+              data-testid="button-verify-otp"
+            >
+              {otpVerifying ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</>
+              ) : "Verify & Start Exam"}
+            </Button>
+            <div className="flex items-center justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setStep("register"); setOtpValue(""); }}
+                className="text-zinc-400 hover:text-white"
+                data-testid="button-back-to-register"
+              >
+                <ArrowLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resendOtp}
+                disabled={otpSending}
+                className="text-violet-400 hover:text-violet-300"
+                data-testid="button-resend-otp"
+              >
+                {otpSending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Resend OTP
+              </Button>
+            </div>
+            <p className="text-xs text-zinc-500 text-center">
+              OTP is valid for 5 minutes. Check your spam folder if you don't see it.
             </p>
           </CardContent>
         </Card>

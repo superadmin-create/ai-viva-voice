@@ -47,6 +47,14 @@ Database tables:
 - `subject_documents` - Uploaded PDF/DOCX files with extracted text for AI reference
 - `session` - Express session store (auto-created by connect-pg-simple)
 
+### Email OTP Verification
+- Students must verify their email via OTP before starting an exam
+- OTP emails sent from `superadmin@leapup.in` via Gmail SMTP (`SMTP_PASSWORD` env var)
+- `server/lib/email-service.ts` handles OTP generation (crypto.randomInt), sending (nodemailer), and verification
+- 6-digit OTP, valid for 5 minutes, max 5 verification attempts, 30-second resend cooldown
+- In-memory OTP storage (Map) — resets on server restart
+- Flow: Registration form → Send OTP → Enter OTP → Verify → Start exam
+
 ### Authentication & Authorization
 - Session-based authentication using `express-session` with `connect-pg-simple` for PostgreSQL session storage
 - Password hashing using Node.js `crypto.scryptSync` with random salt

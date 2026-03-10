@@ -10,6 +10,7 @@ import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
 import multer from "multer";
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
+import { sendOTP, verifyOTP } from "./lib/email-service";
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -482,6 +483,44 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Failed to delete document" });
+    }
+  });
+
+  // Send OTP to student email
+  app.post("/api/otp/send", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || !email.includes('@')) {
+        return res.status(400).json({ error: "Valid email is required" });
+      }
+      const result = await sendOTP(email);
+      if (result.success) {
+        res.json({ success: true, message: "OTP sent to your email" });
+      } else {
+        res.status(400).json({ error: result.error || "Failed to send OTP" });
+      }
+    } catch (error: any) {
+      console.error("Error sending OTP:", error);
+      res.status(500).json({ error: "Failed to send OTP" });
+    }
+  });
+
+  // Verify OTP
+  app.post("/api/otp/verify", async (req, res) => {
+    try {
+      const { email, otp } = req.body;
+      if (!email || !otp) {
+        return res.status(400).json({ error: "Email and OTP are required" });
+      }
+      const result = verifyOTP(email, otp);
+      if (result.valid) {
+        res.json({ success: true, message: "Email verified" });
+      } else {
+        res.status(400).json({ error: result.error || "Invalid OTP" });
+      }
+    } catch (error: any) {
+      console.error("Error verifying OTP:", error);
+      res.status(500).json({ error: "Failed to verify OTP" });
     }
   });
 
