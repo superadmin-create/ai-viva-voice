@@ -262,19 +262,37 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   });
 
   const handleCreateSubject = () => {
-    try {
-      const curriculum = newSubject.curriculum.trim() 
-        ? JSON.parse(newSubject.curriculum) 
-        : [{ title: "General Topics", topics: ["Introduction"] }];
-      
-      createSubjectMutation.mutate({
-        name: newSubject.name,
-        slug: newSubject.slug.toLowerCase().replace(/\s+/g, '-'),
-        curriculum,
-      });
-    } catch (e) {
-      toast.error("Invalid curriculum JSON format");
+    const lines = newSubject.curriculum.trim()
+      ? newSubject.curriculum.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+      : [];
+
+    let curriculum: Array<{ title: string; topics: string[] }> = [];
+
+    if (lines.length === 0) {
+      curriculum = [{ title: "General Topics", topics: ["Introduction"] }];
+    } else {
+      let currentModule: { title: string; topics: string[] } | null = null;
+      for (const line of lines) {
+        if (line.endsWith(':')) {
+          if (currentModule) curriculum.push(currentModule);
+          currentModule = { title: line.slice(0, -1).trim(), topics: [] };
+        } else {
+          const topic = line.startsWith('- ') ? line.slice(2).trim() : line;
+          if (currentModule) {
+            currentModule.topics.push(topic);
+          } else {
+            currentModule = { title: "General Topics", topics: [topic] };
+          }
+        }
+      }
+      if (currentModule) curriculum.push(currentModule);
     }
+
+    createSubjectMutation.mutate({
+      name: newSubject.name,
+      slug: newSubject.slug.toLowerCase().replace(/\s+/g, '-'),
+      curriculum,
+    });
   };
 
   const stats = {
@@ -717,15 +735,21 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
               <p className="text-xs text-muted-foreground mt-1">Students will access via /{newSubject.slug || 'slug'}</p>
             </div>
             <div>
-              <Label>Curriculum (JSON)</Label>
+              <Label>Curriculum Topics</Label>
               <Textarea
-                placeholder='[{"title": "Module 1", "topics": ["Topic 1", "Topic 2"]}]'
+                placeholder={"e.g.:\n\nData Types:\n- Variables and constants\n- Strings and numbers\n- Lists and dictionaries\n\nControl Flow:\n- If/else statements\n- For and while loops"}
                 value={newSubject.curriculum}
                 onChange={(e) => setNewSubject({ ...newSubject, curriculum: e.target.value })}
-                className="min-h-[150px] font-mono text-sm"
+                className="min-h-[150px] text-sm"
                 data-testid="input-curriculum"
               />
-              <p className="text-xs text-muted-foreground mt-1">Leave empty for default curriculum</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                List topics line by line. Use a heading ending with <strong>:</strong> to group into modules. Leave empty for default.
+              </p>
+              <div className="mt-2 p-3 bg-muted/50 rounded-lg">
+                <p className="text-xs font-medium mb-1">Example:</p>
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap">{'Module 1: Basics:\nVariables and data types\nInput and output\n\nModule 2: Control Flow:\nIf/else statements\nLoops and iteration'}</pre>
+              </div>
             </div>
           </div>
           <DialogFooter>
