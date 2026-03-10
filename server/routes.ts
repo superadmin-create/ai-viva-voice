@@ -13,7 +13,7 @@ import { PDFParse } from "pdf-parse";
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     cb(null, allowed.includes(file.mimetype));
@@ -385,7 +385,17 @@ export async function registerRoutes(
   });
 
   // Upload document for a subject
-  app.post("/api/admin/documents", requireAuth, upload.single('file'), async (req: any, res) => {
+  app.post("/api/admin/documents", requireAuth, (req: any, res, next) => {
+    upload.single('file')(req, res, (err: any) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ error: "File is too large. Maximum size is 50MB." });
+        }
+        return res.status(400).json({ error: err.message || "File upload failed" });
+      }
+      next();
+    });
+  }, async (req: any, res) => {
     try {
       const file = req.file;
       const { subjectSlug } = req.body;
