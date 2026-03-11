@@ -609,7 +609,7 @@ export default function VivaPage() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <Label className="text-zinc-400 text-sm">
-                    Your Answer {micAttempts > 0 && !isListening && !answerLocked && `(Attempt ${micAttempts}/2)`}
+                    Your Answer {micAttempts > 0 && !isListening && !answerLocked && `(Attempt ${micAttempts}/3)`}
                   </Label>
                   <div className="flex items-center gap-2">
                     {silenceCountdown !== null && currentAnswer.trim() && (
@@ -638,12 +638,12 @@ export default function VivaPage() {
                   variant="outline"
                   size="sm"
                   onClick={isListening ? stopListening : startListeningWithSilenceDetection}
-                  disabled={answerLocked || (!isListening && micAttempts >= 2)}
+                  disabled={answerLocked || (!isListening && micAttempts >= 3)}
                   className={`border-zinc-600 ${isListening ? 'bg-red-600/20 text-red-400 border-red-600/40' : 'text-zinc-300 hover:bg-zinc-700'}`}
                   data-testid="button-voice"
                 >
                   <Mic className={`h-4 w-4 mr-1.5 ${isListening ? 'animate-pulse' : ''}`} />
-                  {isListening ? 'Stop' : micAttempts >= 2 ? 'No retries left' : micAttempts === 1 ? 'Retry Mic' : 'Mic'}
+                  {isListening ? 'Stop' : micAttempts >= 3 ? 'No retries left' : micAttempts >= 1 ? 'Retry Mic' : 'Mic'}
                 </Button>
                 <Button
                   onClick={manualSubmitAnswer}
@@ -658,10 +658,10 @@ export default function VivaPage() {
               </div>
 
               <p className="text-xs text-zinc-500 text-center">
-                {micAttempts >= 2
+                {micAttempts >= 3
                   ? "No mic retries left — submit your answer"
-                  : micAttempts === 1
-                  ? "1 retry remaining if you need to re-record"
+                  : micAttempts >= 1
+                  ? `${3 - micAttempts} ${3 - micAttempts === 1 ? 'retry' : 'retries'} remaining if you need to re-record`
                   : "Auto-advances after 3 seconds of silence"}
               </p>
             </CardContent>
