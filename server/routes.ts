@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { type Server } from "http";
 import { storage } from "./storage";
 import { insertVivaResultSchema, insertSubjectSchema, insertManualQuestionSchema } from "@shared/schema";
-import { generateVivaQuestions, evaluateAnswer, textToSpeech } from "./lib/openai-service";
+import { generateVivaQuestions, evaluateAnswer, textToSpeech, transcribeAudio } from "./lib/openai-service";
 import { syncVivaResultToSheet } from "./lib/google-sheets-service";
 import { getAllSubjects, getSubjectContent } from "./lib/subject-content";
 import { z } from "zod";
@@ -18,6 +18,14 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const allowed = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     cb(null, allowed.includes(file.mimetype));
+  }
+});
+
+const audioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(null, file.mimetype.startsWith('audio/'));
   }
 });
 
@@ -593,6 +601,21 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error generating speech:", error);
       res.status(500).json({ error: error.message || "Failed to generate speech" });
+    }
+  });
+
+  app.post("/api/viva/transcribe", audioUpload.single("audio"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "Audio file is required" });
+      }
+
+      const mimeType = req.file.mimetype || "audio/webm";
+      const text = await transcribeAudio(req.file.buffer, mimeType);
+      res.json({ text });
+    } catch (error: any) {
+      console.error("Error transcribing audio:", error);
+      res.status(500).json({ error: error.message || "Failed to transcribe audio" });
     }
   });
 

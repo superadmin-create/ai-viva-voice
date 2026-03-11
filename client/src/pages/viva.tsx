@@ -22,7 +22,7 @@ type SubjectInfo = {
   modules: { title: string; topics: string[] }[];
 };
 
-const SILENCE_TIMEOUT_MS = 3000;
+const MAX_RECORDING_MS = 30000;
 
 export default function VivaPage() {
   const [, params] = useRoute("/:subject");
@@ -43,8 +43,11 @@ export default function VivaPage() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
   
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
   const rawAnswersRef = useRef<RawAnswer[]>([]);
-  const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement>(null);
   const autoListenRef = useRef<boolean>(false);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -52,8 +55,7 @@ export default function VivaPage() {
   const currentAnswerRef = useRef<string>("");
   const isProcessingRef = useRef<boolean>(false);
   const questionsRef = useRef<string[]>([]);
-  const pendingStartRef = useRef<boolean>(false);
-  const recognitionActiveRef = useRef<boolean>(false);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     currentAnswerRef.current = currentAnswer;
@@ -135,8 +137,8 @@ export default function VivaPage() {
     clearSilenceTimer();
     autoListenRef.current = false;
     
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (e) {}
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try { mediaRecorderRef.current.stop(); } catch (e) {}
     }
     setIsListening(false);
     
@@ -166,7 +168,7 @@ export default function VivaPage() {
   const startSilenceTimer = useCallback(() => {
     clearSilenceTimer();
     
-    setSilenceCountdown(SILENCE_TIMEOUT_MS / 1000);
+    setSilenceCountdown(MAX_RECORDING_MS / 1000);
     countdownIntervalRef.current = setInterval(() => {
       setSilenceCountdown(prev => {
         if (prev === null || prev <= 1) return null;
@@ -176,107 +178,100 @@ export default function VivaPage() {
 
     silenceTimerRef.current = setTimeout(() => {
       clearSilenceTimer();
-      const answer = currentAnswerRef.current;
-      if (answer.trim() && !isProcessingRef.current) {
-        processAnswer(answer, currentQuestionIndex);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
       }
-    }, SILENCE_TIMEOUT_MS);
-  }, [clearSilenceTimer, processAnswer, currentQuestionIndex]);
+      setIsListening(false);
+    }, MAX_RECORDING_MS);
+  }, [clearSilenceTimer]);
+
+  const sendAudioForTranscription = useCallback(async (audioBlob: Blob) => {
+    if (audioBlob.size < 1000) return;
+    setIsTranscribing(true);
+    try {
+      const formData = new FormData();
+      const ext = audioBlob.type.includes("mp4") ? "mp4" : audioBlob.type.includes("wav") ? "wav" : "webm";
+      formData.append("audio", audioBlob, `recording.${ext}`);
+      const response = await fetch("/api/viva/transcribe", {
+        method: "POST",
+        body: formData,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.text && data.text.trim()) {
+          setCurrentAnswer(data.text.trim());
+        }
+      }
+    } catch (e) {
+      console.error("Transcription error:", e);
+    } finally {
+      setIsTranscribing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if ('webkitSpeechRecognition' in window) {
-      const SpeechRecognition = (window as any).webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
+    return () => {
+      clearSilenceTimer();
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(t => t.stop());
+        mediaStreamRef.current = null;
+      }
+    };
+  }, [clearSilenceTimer]);
 
-      recognitionRef.current.onstart = () => {
-        recognitionActiveRef.current = true;
-        setIsListening(true);
+  const startListeningWithSilenceDetection = useCallback(async () => {
+    if (isProcessingRef.current) return;
+
+    if (audioRef.current && !audioRef.current.paused) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsSpeaking(false);
+    }
+
+    setMicAttempts(prev => prev + 1);
+    setCurrentAnswer("");
+    autoListenRef.current = true;
+
+    try {
+      if (!mediaStreamRef.current) {
+        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "";
+      const recorder = mimeType
+        ? new MediaRecorder(mediaStreamRef.current, { mimeType })
+        : new MediaRecorder(mediaStreamRef.current);
+      audioChunksRef.current = [];
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
 
-      recognitionRef.current.onresult = (event: any) => {
-        let finalTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript + ' ';
-          }
-        }
-        if (finalTranscript) {
-          setCurrentAnswer(prev => (prev + ' ' + finalTranscript).trim());
-        }
-        if (autoListenRef.current) {
-          startSilenceTimer();
-        }
-      };
-
-      recognitionRef.current.onend = () => {
-        recognitionActiveRef.current = false;
+      recorder.onstop = () => {
         setIsListening(false);
-        
-        // Handle pending start request
-        if (pendingStartRef.current && recognitionRef.current && !isProcessingRef.current) {
-          pendingStartRef.current = false;
-          try {
-            recognitionRef.current.start();
-          } catch (e) {}
-        } else if (autoListenRef.current && recognitionRef.current && !isProcessingRef.current) {
-          try {
-            recognitionRef.current.start();
-          } catch (e) {}
-        }
+        const blobType = recorder.mimeType || "audio/webm";
+        const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
+        sendAudioForTranscription(audioBlob);
       };
 
-      recognitionRef.current.onerror = (event: any) => {
-        if (event.error === 'no-speech' && currentAnswerRef.current.trim()) {
-          startSilenceTimer();
-        } else if (event.error !== 'no-speech') {
-          recognitionActiveRef.current = false;
-          setIsListening(false);
-        }
-      };
+      recorder.start();
+      setIsListening(true);
+      startSilenceTimer();
+    } catch (e) {
+      console.error("Mic access error:", e);
+      toast.error("Could not access microphone");
+      setIsListening(false);
     }
-    return () => clearSilenceTimer();
-  }, [startSilenceTimer, clearSilenceTimer]);
-
-  const startListeningWithSilenceDetection = useCallback(() => {
-    if (recognitionRef.current && !isProcessingRef.current) {
-      if (audioRef.current && !audioRef.current.paused) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        setIsSpeaking(false);
-      }
-      
-      setMicAttempts(prev => prev + 1);
-      setCurrentAnswer("");
-      autoListenRef.current = true;
-      
-      if (recognitionActiveRef.current) {
-        pendingStartRef.current = true;
-        setIsListening(true);
-        startSilenceTimer();
-        return;
-      }
-      
-      try {
-        recognitionRef.current.start();
-        startSilenceTimer();
-      } catch (e) {
-        pendingStartRef.current = true;
-        setIsListening(true);
-        startSilenceTimer();
-      }
-    }
-  }, [startSilenceTimer]);
+  }, [startSilenceTimer, sendAudioForTranscription]);
 
   const stopListening = useCallback(() => {
     autoListenRef.current = false;
-    pendingStartRef.current = false;
     clearSilenceTimer();
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
     }
+    setIsListening(false);
   }, [clearSilenceTimer]);
 
   const speakTextAsync = useCallback((text: string): Promise<void> => {
@@ -612,9 +607,14 @@ export default function VivaPage() {
                     Your Answer {micAttempts > 0 && !isListening && !answerLocked && `(Attempt ${micAttempts}/3)`}
                   </Label>
                   <div className="flex items-center gap-2">
-                    {silenceCountdown !== null && currentAnswer.trim() && (
+                    {silenceCountdown !== null && isListening && (
                       <Badge className="bg-amber-600/20 text-amber-400 border-amber-600/30 text-xs">
-                        <Clock className="h-3 w-3 mr-1" /> {silenceCountdown}s
+                        <Clock className="h-3 w-3 mr-1" /> {silenceCountdown}s left
+                      </Badge>
+                    )}
+                    {isTranscribing && (
+                      <Badge className="bg-blue-600/20 text-blue-400 border-blue-600/30 animate-pulse text-xs">
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" /> Transcribing...
                       </Badge>
                     )}
                     {isListening && (
@@ -627,7 +627,7 @@ export default function VivaPage() {
                 <Textarea
                   value={currentAnswer}
                   readOnly
-                  placeholder="Your spoken answer will appear here..."
+                  placeholder={isTranscribing ? "Transcribing your answer..." : "Your spoken answer will appear here..."}
                   className={`min-h-[120px] bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 resize-none cursor-default ${answerLocked ? 'opacity-70' : ''}`}
                   data-testid="input-answer"
                 />
@@ -638,7 +638,7 @@ export default function VivaPage() {
                   variant="outline"
                   size="sm"
                   onClick={isListening ? stopListening : startListeningWithSilenceDetection}
-                  disabled={answerLocked || (!isListening && micAttempts >= 3)}
+                  disabled={answerLocked || isTranscribing || (!isListening && micAttempts >= 3)}
                   className={`border-zinc-600 ${isListening ? 'bg-red-600/20 text-red-400 border-red-600/40' : 'text-zinc-300 hover:bg-zinc-700'}`}
                   data-testid="button-voice"
                 >
@@ -647,7 +647,7 @@ export default function VivaPage() {
                 </Button>
                 <Button
                   onClick={manualSubmitAnswer}
-                  disabled={!currentAnswer.trim() || answerLocked}
+                  disabled={!currentAnswer.trim() || answerLocked || isTranscribing}
                   className="flex-1 bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-40"
                   data-testid="button-submit-answer"
                 >
@@ -661,8 +661,8 @@ export default function VivaPage() {
                 {micAttempts >= 3
                   ? "No mic retries left — submit your answer"
                   : micAttempts >= 1
-                  ? `${3 - micAttempts} ${3 - micAttempts === 1 ? 'retry' : 'retries'} remaining if you need to re-record`
-                  : "Auto-advances after 3 seconds of silence"}
+                  ? `${3 - micAttempts} ${3 - micAttempts === 1 ? 'retry' : 'retries'} remaining — click Stop when done speaking`
+                  : "Click Stop when you're done speaking, or it auto-stops after 30s"}
               </p>
             </CardContent>
           </Card>

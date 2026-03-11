@@ -67,12 +67,15 @@ Database tables:
 - Student-facing viva routes (`/:subject`) do not require authentication
 
 ### AI Integration
-- **Provider**: OpenAI (GPT-5)
+- **Provider**: OpenAI
 - **Features**: 
-  - Dynamic question generation based on subject curriculum and uploaded documents
-  - Answer evaluation with scoring and feedback, referencing uploaded document content
-  - Text-to-speech for question delivery
+  - Dynamic question generation based on subject curriculum and uploaded documents (GPT-4o-mini)
+  - Answer evaluation with scoring and feedback, referencing uploaded document content (GPT-5)
+  - Text-to-speech for question delivery (TTS-1)
+  - Speech-to-text transcription via OpenAI Whisper API (`whisper-1`) — replaces browser Web Speech API for better accuracy
   - Document text extraction from PDF (pdf-parse) and DOCX (mammoth) files
+- **Transcription flow**: MediaRecorder captures audio → sent to `/api/viva/transcribe` → Whisper transcribes → text displayed in answer field
+- **Mic attempts**: 3 per question (1 auto-start + 2 manual retries)
 
 ### External Integrations
 - Google Sheets API for syncing exam results (via Replit connectors)

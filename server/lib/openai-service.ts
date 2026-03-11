@@ -106,6 +106,19 @@ Respond in JSON format: { "score": number, "feedback": string, "isCorrect": bool
   };
 }
 
+export async function transcribeAudio(audioBuffer: Buffer, mimeType: string = "audio/webm"): Promise<string> {
+  const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("mp4") ? "mp4" : "webm";
+  const file = new File([audioBuffer], `audio.${ext}`, { type: mimeType });
+
+  const transcription = await openai.audio.transcriptions.create({
+    model: "whisper-1",
+    file,
+    language: "en",
+  });
+
+  return transcription.text || "";
+}
+
 export async function textToSpeech(text: string): Promise<Buffer> {
   const mp3 = await openai.audio.speech.create({
     model: "tts-1",
