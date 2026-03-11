@@ -28,14 +28,50 @@ export default function VivaPage() {
   const [, params] = useRoute("/:subject");
   const subject = params?.subject || "";
 
-  const [step, setStep] = useState<"register" | "otp" | "preparing" | "exam" | "completed">("register");
-  const [studentInfo, setStudentInfo] = useState({ name: "", email: "", phone: "", studentClass: "", division: "" });
+  const sessionKey = `viva_${subject}`;
+
+  const [step, setStepRaw] = useState<"register" | "otp" | "preparing" | "exam" | "completed">(() => {
+    try {
+      const saved = sessionStorage.getItem(`${sessionKey}_step`);
+      if (saved === "exam" || saved === "preparing") return saved;
+    } catch {}
+    return "register";
+  });
+  const setStep = useCallback((newStep: "register" | "otp" | "preparing" | "exam" | "completed") => {
+    setStepRaw(newStep);
+    try { sessionStorage.setItem(`${sessionKey}_step`, newStep); } catch {}
+  }, [sessionKey]);
+
+  const [studentInfo, setStudentInfo] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(`${sessionKey}_student`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return { name: "", email: "", phone: "", studentClass: "", division: "" };
+  });
+  const updateStudentInfo = useCallback((info: typeof studentInfo) => {
+    setStudentInfo(info);
+    try { sessionStorage.setItem(`${sessionKey}_student`, JSON.stringify(info)); } catch {}
+  }, [sessionKey]);
+
   const [otpValue, setOtpValue] = useState("");
   const [otpSending, setOtpSending] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
   
-  const [questions, setQuestions] = useState<string[]>([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [questions, setQuestions] = useState<string[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(`${sessionKey}_questions`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(`${sessionKey}_qIndex`);
+      if (saved) return parseInt(saved, 10);
+    } catch {}
+    return 0;
+  });
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [answerLocked, setAnswerLocked] = useState(false);
   const [micAttempts, setMicAttempts] = useState(0);
@@ -44,6 +80,25 @@ export default function VivaPage() {
   const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
   
   const [isTranscribing, setIsTranscribing] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (questions.length > 0) sessionStorage.setItem(`${sessionKey}_questions`, JSON.stringify(questions));
+    } catch {}
+  }, [questions, sessionKey]);
+
+  useEffect(() => {
+    try { sessionStorage.setItem(`${sessionKey}_qIndex`, String(currentQuestionIndex)); } catch {}
+  }, [currentQuestionIndex, sessionKey]);
+
+  useEffect(() => {
+    if ((step === "exam" || step === "preparing") && questions.length > 0) {
+      setStepRaw("exam");
+    } else if (step === "preparing" && questions.length === 0) {
+      setStepRaw("register");
+      try { sessionStorage.removeItem(`${sessionKey}_step`); } catch {}
+    }
+  }, []);
 
   const rawAnswersRef = useRef<RawAnswer[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -122,6 +177,12 @@ export default function VivaPage() {
         subject,
         rawAnswers: rawAnswersRef.current,
       });
+      try {
+        sessionStorage.removeItem(`${sessionKey}_step`);
+        sessionStorage.removeItem(`${sessionKey}_student`);
+        sessionStorage.removeItem(`${sessionKey}_questions`);
+        sessionStorage.removeItem(`${sessionKey}_qIndex`);
+      } catch {}
       setStep("completed");
     } catch (error) {
       console.error("Submit error:", error);
@@ -365,15 +426,24 @@ export default function VivaPage() {
       toast.success("Email verified!");
       rawAnswersRef.current = [];
       setStep("preparing");
+
       const result = await generateQuestionsMutation.mutateAsync(subject);
       setQuestions(result.questions);
       setStep("exam");
+
       if (result.questions.length > 0) {
-        await speakTextAsync(result.questions[0]);
-        startListeningWithSilenceDetection();
+        try {
+          await speakTextAsync(result.questions[0]);
+        } catch {}
+        try {
+          await startListeningWithSilenceDetection();
+        } catch {}
       }
     } catch (error: any) {
-      toast.error(error.message);
+      if (step === "preparing" || step === "register" || step === "otp") {
+        setStep("register");
+      }
+      toast.error(error.message || "Something went wrong. Please try again.");
     } finally {
       setOtpVerifying(false);
     }
@@ -413,7 +483,7 @@ export default function VivaPage() {
                   id="name"
                   placeholder="Enter your name"
                   value={studentInfo.name}
-                  onChange={(e) => setStudentInfo({ ...studentInfo, name: e.target.value })}
+                  onChange={(e) => updateStudentInfo({ ...studentInfo, name: e.target.value })}
                   className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                   data-testid="input-name"
                 />
@@ -427,7 +497,7 @@ export default function VivaPage() {
                   type="email"
                   placeholder="Enter your email"
                   value={studentInfo.email}
-                  onChange={(e) => setStudentInfo({ ...studentInfo, email: e.target.value })}
+                  onChange={(e) => updateStudentInfo({ ...studentInfo, email: e.target.value })}
                   className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                   data-testid="input-email"
                 />
@@ -441,7 +511,7 @@ export default function VivaPage() {
                   type="tel"
                   placeholder="Enter your phone"
                   value={studentInfo.phone}
-                  onChange={(e) => setStudentInfo({ ...studentInfo, phone: e.target.value })}
+                  onChange={(e) => updateStudentInfo({ ...studentInfo, phone: e.target.value })}
                   className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                   data-testid="input-phone"
                 />
@@ -455,7 +525,7 @@ export default function VivaPage() {
                     id="studentClass"
                     placeholder="e.g., FY BMS"
                     value={studentInfo.studentClass}
-                    onChange={(e) => setStudentInfo({ ...studentInfo, studentClass: e.target.value })}
+                    onChange={(e) => updateStudentInfo({ ...studentInfo, studentClass: e.target.value })}
                     className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                     data-testid="input-class"
                   />
@@ -468,7 +538,7 @@ export default function VivaPage() {
                     id="division"
                     placeholder="e.g., A"
                     value={studentInfo.division}
-                    onChange={(e) => setStudentInfo({ ...studentInfo, division: e.target.value })}
+                    onChange={(e) => updateStudentInfo({ ...studentInfo, division: e.target.value })}
                     className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                     data-testid="input-division"
                   />
