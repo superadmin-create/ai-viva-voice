@@ -37,6 +37,7 @@ export default function VivaPage() {
   const [questions, setQuestions] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [currentAnswer, setCurrentAnswer] = useState("");
+  const [answerLocked, setAnswerLocked] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
@@ -129,6 +130,7 @@ export default function VivaPage() {
     if (!answer.trim() || isProcessingRef.current) return;
     
     isProcessingRef.current = true;
+    setAnswerLocked(true);
     clearSilenceTimer();
     autoListenRef.current = false;
     
@@ -144,11 +146,11 @@ export default function VivaPage() {
       answer: answer.trim(),
     });
     
-    setCurrentAnswer("");
-    
     if (questionIndex < allQuestions.length - 1) {
       const nextIndex = questionIndex + 1;
       setCurrentQuestionIndex(nextIndex);
+      setCurrentAnswer("");
+      setAnswerLocked(false);
       isProcessingRef.current = false;
       
       await speakTextAsync(allQuestions[nextIndex]);
@@ -622,11 +624,13 @@ export default function VivaPage() {
                 <Textarea
                   value={currentAnswer}
                   onChange={(e) => {
+                    if (answerLocked) return;
                     setCurrentAnswer(e.target.value);
                     if (e.target.value.trim()) startSilenceTimer();
                   }}
+                  readOnly={answerLocked}
                   placeholder="Speak your answer..."
-                  className="min-h-[120px] bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 resize-none"
+                  className={`min-h-[120px] bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 resize-none ${answerLocked ? 'opacity-70 cursor-not-allowed' : ''}`}
                   data-testid="input-answer"
                 />
               </div>
@@ -636,6 +640,7 @@ export default function VivaPage() {
                   variant="outline"
                   size="sm"
                   onClick={isListening ? stopListening : startListeningWithSilenceDetection}
+                  disabled={answerLocked}
                   className={`border-zinc-600 ${isListening ? 'bg-red-600/20 text-red-400 border-red-600/40' : 'text-zinc-300 hover:bg-zinc-700'}`}
                   data-testid="button-voice"
                 >
@@ -644,11 +649,13 @@ export default function VivaPage() {
                 </Button>
                 <Button
                   onClick={manualSubmitAnswer}
-                  disabled={!currentAnswer.trim()}
+                  disabled={!currentAnswer.trim() || answerLocked}
                   className="flex-1 bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-40"
                   data-testid="button-submit-answer"
                 >
-                  {currentQuestionIndex < questions.length - 1 ? "Next" : "Finish"}
+                  {answerLocked ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
+                  ) : currentQuestionIndex < questions.length - 1 ? "Next" : "Finish"}
                 </Button>
               </div>
 
