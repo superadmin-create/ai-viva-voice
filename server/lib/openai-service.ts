@@ -16,8 +16,7 @@ async function getDocumentContext(subjectSlug: string): Promise<string> {
   const docs = await storage.getDocumentsBySubject(subjectSlug);
   if (docs.length === 0) return "";
   const combined = docs.map(d => d.extractedText).join("\n\n");
-  const truncated = combined.slice(0, 8000);
-  return truncated;
+  return combined;
 }
 
 export async function generateVivaQuestions(subjectSlug: string, count: number = 5): Promise<string[]> {
