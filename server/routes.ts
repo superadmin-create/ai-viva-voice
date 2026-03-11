@@ -599,13 +599,12 @@ export async function registerRoutes(
   // Submit viva results with raw answers - evaluates in background
   app.post("/api/viva/submit-fast", async (req, res) => {
     try {
-      const { studentName, studentEmail, studentPhone, subject, rawAnswers } = req.body;
+      const { studentName, studentEmail, studentPhone, studentClass, studentDivision, subject, rawAnswers } = req.body;
       
       if (!studentName || !studentEmail || !studentPhone || !subject || !rawAnswers) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
-      // Create initial result with placeholder scores
       const placeholderTranscript = rawAnswers.map((ra: { question: string; answer: string }) => ({
         question: ra.question,
         answer: ra.answer,
@@ -617,6 +616,8 @@ export async function registerRoutes(
         studentName,
         studentEmail,
         studentPhone,
+        studentClass: studentClass || "",
+        studentDivision: studentDivision || "",
         subject,
         score: 0,
         maxScore: rawAnswers.length * 10,
