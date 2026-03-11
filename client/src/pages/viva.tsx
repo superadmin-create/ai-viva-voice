@@ -38,6 +38,7 @@ export default function VivaPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [answerLocked, setAnswerLocked] = useState(false);
+  const [micAttempts, setMicAttempts] = useState(0);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
@@ -151,6 +152,7 @@ export default function VivaPage() {
       setCurrentQuestionIndex(nextIndex);
       setCurrentAnswer("");
       setAnswerLocked(false);
+      setMicAttempts(0);
       isProcessingRef.current = false;
       
       await speakTextAsync(allQuestions[nextIndex]);
@@ -239,19 +241,19 @@ export default function VivaPage() {
 
   const startListeningWithSilenceDetection = useCallback(() => {
     if (recognitionRef.current && !isProcessingRef.current) {
-      // Stop audio if playing to allow immediate mic start
       if (audioRef.current && !audioRef.current.paused) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
         setIsSpeaking(false);
       }
       
+      setMicAttempts(prev => prev + 1);
+      setCurrentAnswer("");
       autoListenRef.current = true;
       
-      // If recognition is currently active/stopping, queue a pending start
       if (recognitionActiveRef.current) {
         pendingStartRef.current = true;
-        setIsListening(true); // Show UI as listening
+        setIsListening(true);
         startSilenceTimer();
         return;
       }
@@ -260,7 +262,6 @@ export default function VivaPage() {
         recognitionRef.current.start();
         startSilenceTimer();
       } catch (e) {
-        // If start fails (still stopping), queue it
         pendingStartRef.current = true;
         setIsListening(true);
         startSilenceTimer();
@@ -607,7 +608,9 @@ export default function VivaPage() {
             <CardContent className="space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <Label className="text-zinc-400 text-sm">Your Answer</Label>
+                  <Label className="text-zinc-400 text-sm">
+                    Your Answer {micAttempts > 0 && !isListening && !answerLocked && `(Attempt ${micAttempts}/2)`}
+                  </Label>
                   <div className="flex items-center gap-2">
                     {silenceCountdown !== null && currentAnswer.trim() && (
                       <Badge className="bg-amber-600/20 text-amber-400 border-amber-600/30 text-xs">
@@ -623,14 +626,9 @@ export default function VivaPage() {
                 </div>
                 <Textarea
                   value={currentAnswer}
-                  onChange={(e) => {
-                    if (answerLocked) return;
-                    setCurrentAnswer(e.target.value);
-                    if (e.target.value.trim()) startSilenceTimer();
-                  }}
-                  readOnly={answerLocked}
-                  placeholder="Speak your answer..."
-                  className={`min-h-[120px] bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 resize-none ${answerLocked ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  readOnly
+                  placeholder="Your spoken answer will appear here..."
+                  className={`min-h-[120px] bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 resize-none cursor-default ${answerLocked ? 'opacity-70' : ''}`}
                   data-testid="input-answer"
                 />
               </div>
@@ -640,12 +638,12 @@ export default function VivaPage() {
                   variant="outline"
                   size="sm"
                   onClick={isListening ? stopListening : startListeningWithSilenceDetection}
-                  disabled={answerLocked}
+                  disabled={answerLocked || (!isListening && micAttempts >= 2)}
                   className={`border-zinc-600 ${isListening ? 'bg-red-600/20 text-red-400 border-red-600/40' : 'text-zinc-300 hover:bg-zinc-700'}`}
                   data-testid="button-voice"
                 >
                   <Mic className={`h-4 w-4 mr-1.5 ${isListening ? 'animate-pulse' : ''}`} />
-                  {isListening ? 'Stop' : 'Mic'}
+                  {isListening ? 'Stop' : micAttempts >= 2 ? 'No retries left' : micAttempts === 1 ? 'Retry Mic' : 'Mic'}
                 </Button>
                 <Button
                   onClick={manualSubmitAnswer}
@@ -660,7 +658,11 @@ export default function VivaPage() {
               </div>
 
               <p className="text-xs text-zinc-500 text-center">
-                Auto-advances after 3 seconds of silence
+                {micAttempts >= 2
+                  ? "No mic retries left — submit your answer"
+                  : micAttempts === 1
+                  ? "1 retry remaining if you need to re-record"
+                  : "Auto-advances after 3 seconds of silence"}
               </p>
             </CardContent>
           </Card>
