@@ -391,19 +391,19 @@ export default function VivaPage() {
 
   if (step === "register") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4 py-6 sm:p-6">
         <Card className="w-full max-w-lg bg-zinc-800/80 border-zinc-700 shadow-2xl backdrop-blur" data-testid="card-registration">
-          <CardHeader className="text-center pb-2">
-            <CardTitle className="text-3xl font-bold text-white" data-testid="heading-viva-title">
+          <CardHeader className="text-center pb-2 px-4 sm:px-6">
+            <CardTitle className="text-2xl sm:text-3xl font-bold text-white" data-testid="heading-viva-title">
               AI Mock Viva
             </CardTitle>
             <CardDescription>
-              <Badge variant="outline" className="text-base px-4 py-1 capitalize border-violet-500 text-violet-400" data-testid="badge-subject">
+              <Badge variant="outline" className="text-sm sm:text-base px-3 sm:px-4 py-1 capitalize border-violet-500 text-violet-400" data-testid="badge-subject">
                 {displaySubjectName}
               </Badge>
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-4 sm:space-y-5 px-4 sm:px-6">
             <div className="space-y-3">
               <div className="space-y-1">
                 <Label htmlFor="name" className="text-zinc-300 flex items-center gap-2 text-sm">
@@ -414,7 +414,7 @@ export default function VivaPage() {
                   placeholder="Enter your name"
                   value={studentInfo.name}
                   onChange={(e) => setStudentInfo({ ...studentInfo, name: e.target.value })}
-                  className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500"
+                  className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                   data-testid="input-name"
                 />
               </div>
@@ -428,7 +428,7 @@ export default function VivaPage() {
                   placeholder="Enter your email"
                   value={studentInfo.email}
                   onChange={(e) => setStudentInfo({ ...studentInfo, email: e.target.value })}
-                  className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500"
+                  className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                   data-testid="input-email"
                 />
               </div>
@@ -442,7 +442,7 @@ export default function VivaPage() {
                   placeholder="Enter your phone"
                   value={studentInfo.phone}
                   onChange={(e) => setStudentInfo({ ...studentInfo, phone: e.target.value })}
-                  className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500"
+                  className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                   data-testid="input-phone"
                 />
               </div>
@@ -456,7 +456,7 @@ export default function VivaPage() {
                     placeholder="e.g., FY BMS"
                     value={studentInfo.studentClass}
                     onChange={(e) => setStudentInfo({ ...studentInfo, studentClass: e.target.value })}
-                    className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500"
+                    className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                     data-testid="input-class"
                   />
                 </div>
@@ -469,7 +469,7 @@ export default function VivaPage() {
                     placeholder="e.g., A"
                     value={studentInfo.division}
                     onChange={(e) => setStudentInfo({ ...studentInfo, division: e.target.value })}
-                    className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500"
+                    className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                     data-testid="input-division"
                   />
                 </div>
@@ -477,7 +477,7 @@ export default function VivaPage() {
             </div>
             <Button
               onClick={sendOtpToEmail}
-              className="w-full h-11 text-base bg-violet-600 hover:bg-violet-500 text-white"
+              className="w-full h-12 text-base bg-violet-600 hover:bg-violet-500 text-white"
               disabled={otpSending}
               data-testid="button-start-exam"
             >
@@ -497,32 +497,33 @@ export default function VivaPage() {
 
   if (step === "otp") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4 py-6 sm:p-6">
         <Card className="w-full max-w-md bg-zinc-800/50 border-zinc-700 backdrop-blur">
-          <CardHeader className="text-center">
+          <CardHeader className="text-center px-4 sm:px-6">
             <div className="mx-auto w-12 h-12 rounded-full bg-violet-600/20 flex items-center justify-center mb-2">
               <ShieldCheck className="h-6 w-6 text-violet-400" />
             </div>
             <CardTitle className="text-xl text-white" data-testid="text-otp-title">Verify Your Email</CardTitle>
             <p className="text-sm text-zinc-400">
-              We've sent a 6-digit OTP to <span className="text-violet-400 font-medium">{studentInfo.email}</span>
+              We've sent a 6-digit OTP to <span className="text-violet-400 font-medium break-all">{studentInfo.email}</span>
             </p>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-4 sm:px-6">
             <div>
               <Label className="text-zinc-300 text-sm">Enter OTP</Label>
               <Input
                 value={otpValue}
                 onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="Enter 6-digit OTP"
-                className="bg-zinc-700/50 border-zinc-600 text-white text-center text-lg tracking-[0.5em] placeholder:tracking-normal placeholder:text-sm"
+                className="bg-zinc-700/50 border-zinc-600 text-white text-center text-lg tracking-[0.5em] placeholder:tracking-normal placeholder:text-sm h-12"
                 maxLength={6}
+                inputMode="numeric"
                 data-testid="input-otp"
               />
             </div>
             <Button
               onClick={verifyOtpAndStart}
-              className="w-full h-11 text-base bg-violet-600 hover:bg-violet-500 text-white"
+              className="w-full h-12 text-base bg-violet-600 hover:bg-violet-500 text-white"
               disabled={otpVerifying || otpValue.length < 6}
               data-testid="button-verify-otp"
             >
@@ -535,7 +536,7 @@ export default function VivaPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => { setStep("register"); setOtpValue(""); }}
-                className="text-zinc-400 hover:text-white"
+                className="text-zinc-400 hover:text-white h-10 px-3"
                 data-testid="button-back-to-register"
               >
                 <ArrowLeft className="h-4 w-4 mr-1" /> Back
@@ -545,7 +546,7 @@ export default function VivaPage() {
                 size="sm"
                 onClick={resendOtp}
                 disabled={otpSending}
-                className="text-violet-400 hover:text-violet-300"
+                className="text-violet-400 hover:text-violet-300 h-10 px-3"
                 data-testid="button-resend-otp"
               >
                 {otpSending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
@@ -564,10 +565,10 @@ export default function VivaPage() {
 
   if (step === "preparing") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4 py-6 sm:p-6">
         <div className="text-center">
           <Loader2 className="h-10 w-10 animate-spin mx-auto text-violet-500 mb-3" />
-          <p className="text-lg text-white font-medium">Preparing questions...</p>
+          <p className="text-base sm:text-lg text-white font-medium">Preparing questions...</p>
           <p className="text-sm text-zinc-400">{displaySubjectName}</p>
         </div>
         <audio ref={audioRef} hidden />
@@ -577,12 +578,12 @@ export default function VivaPage() {
 
   if (step === "exam") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 px-3 py-4 sm:p-4">
         <div className="container mx-auto max-w-3xl">
-          <div className="mb-4">
+          <div className="mb-3 sm:mb-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-zinc-400">Question {currentQuestionIndex + 1}/{questions.length}</span>
-              <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-400">
+              <span className="text-xs sm:text-sm text-zinc-400">Question {currentQuestionIndex + 1}/{questions.length}</span>
+              <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-400 max-w-[140px] sm:max-w-none truncate">
                 {displaySubjectName}
               </Badge>
             </div>
@@ -590,36 +591,36 @@ export default function VivaPage() {
           </div>
 
           <Card className="bg-zinc-800/80 border-zinc-700 shadow-xl backdrop-blur" data-testid="card-question">
-            <CardHeader className="pb-3">
-              <div className="flex items-start gap-3">
-                <div className={`p-2.5 rounded-full shrink-0 ${isSpeaking ? 'bg-violet-600 animate-pulse' : 'bg-zinc-700'}`}>
-                  <Volume2 className={`h-5 w-5 ${isSpeaking ? 'text-white' : 'text-zinc-400'}`} />
+            <CardHeader className="pb-3 px-4 sm:px-6">
+              <div className="flex items-start gap-2.5 sm:gap-3">
+                <div className={`p-2 sm:p-2.5 rounded-full shrink-0 ${isSpeaking ? 'bg-violet-600 animate-pulse' : 'bg-zinc-700'}`}>
+                  <Volume2 className={`h-4 w-4 sm:h-5 sm:w-5 ${isSpeaking ? 'text-white' : 'text-zinc-400'}`} />
                 </div>
-                <CardTitle className="text-lg text-white font-medium leading-relaxed" data-testid="text-current-question">
+                <CardTitle className="text-base sm:text-lg text-white font-medium leading-relaxed" data-testid="text-current-question">
                   {questions[currentQuestionIndex]}
                 </CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6">
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-zinc-400 text-sm">
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+                  <Label className="text-zinc-400 text-xs sm:text-sm">
                     Your Answer {micAttempts > 0 && !isListening && !answerLocked && `(Attempt ${micAttempts}/3)`}
                   </Label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     {silenceCountdown !== null && isListening && (
-                      <Badge className="bg-amber-600/20 text-amber-400 border-amber-600/30 text-xs">
-                        <Clock className="h-3 w-3 mr-1" /> {silenceCountdown}s left
+                      <Badge className="bg-amber-600/20 text-amber-400 border-amber-600/30 text-[10px] sm:text-xs px-1.5 sm:px-2">
+                        <Clock className="h-3 w-3 mr-0.5 sm:mr-1" /> {silenceCountdown}s left
                       </Badge>
                     )}
                     {isTranscribing && (
-                      <Badge className="bg-blue-600/20 text-blue-400 border-blue-600/30 animate-pulse text-xs">
-                        <Loader2 className="h-3 w-3 mr-1 animate-spin" /> Transcribing...
+                      <Badge className="bg-blue-600/20 text-blue-400 border-blue-600/30 animate-pulse text-[10px] sm:text-xs px-1.5 sm:px-2">
+                        <Loader2 className="h-3 w-3 mr-0.5 sm:mr-1 animate-spin" /> Transcribing...
                       </Badge>
                     )}
                     {isListening && (
-                      <Badge className="bg-red-600/20 text-red-400 border-red-600/30 animate-pulse text-xs">
-                        <Mic className="h-3 w-3 mr-1" /> Recording
+                      <Badge className="bg-red-600/20 text-red-400 border-red-600/30 animate-pulse text-[10px] sm:text-xs px-1.5 sm:px-2">
+                        <Mic className="h-3 w-3 mr-0.5 sm:mr-1" /> Recording
                       </Badge>
                     )}
                   </div>
@@ -628,7 +629,7 @@ export default function VivaPage() {
                   value={currentAnswer}
                   readOnly
                   placeholder={isTranscribing ? "Transcribing your answer..." : "Your spoken answer will appear here..."}
-                  className={`min-h-[120px] bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 resize-none cursor-default ${answerLocked ? 'opacity-70' : ''}`}
+                  className={`min-h-[100px] sm:min-h-[120px] bg-zinc-700/50 border-zinc-600 text-white text-sm sm:text-base placeholder:text-zinc-500 resize-none cursor-default ${answerLocked ? 'opacity-70' : ''}`}
                   data-testid="input-answer"
                 />
               </div>
@@ -636,19 +637,18 @@ export default function VivaPage() {
               <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={isListening ? stopListening : startListeningWithSilenceDetection}
                   disabled={answerLocked || isTranscribing || (!isListening && micAttempts >= 3)}
-                  className={`border-zinc-600 ${isListening ? 'bg-red-600/20 text-red-400 border-red-600/40' : 'text-zinc-300 hover:bg-zinc-700'}`}
+                  className={`h-11 sm:h-10 px-3 sm:px-4 border-zinc-600 text-sm ${isListening ? 'bg-red-600/20 text-red-400 border-red-600/40' : 'text-zinc-300 hover:bg-zinc-700'}`}
                   data-testid="button-voice"
                 >
                   <Mic className={`h-4 w-4 mr-1.5 ${isListening ? 'animate-pulse' : ''}`} />
-                  {isListening ? 'Stop' : micAttempts >= 3 ? 'No retries left' : micAttempts >= 1 ? 'Retry Mic' : 'Mic'}
+                  {isListening ? 'Stop' : micAttempts >= 3 ? 'No retries' : micAttempts >= 1 ? 'Retry' : 'Mic'}
                 </Button>
                 <Button
                   onClick={manualSubmitAnswer}
                   disabled={!currentAnswer.trim() || answerLocked || isTranscribing}
-                  className="flex-1 bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-40"
+                  className="flex-1 h-11 sm:h-10 bg-violet-600 hover:bg-violet-500 text-white text-sm disabled:opacity-40"
                   data-testid="button-submit-answer"
                 >
                   {answerLocked ? (
@@ -657,7 +657,7 @@ export default function VivaPage() {
                 </Button>
               </div>
 
-              <p className="text-xs text-zinc-500 text-center">
+              <p className="text-[11px] sm:text-xs text-zinc-500 text-center">
                 {micAttempts >= 3
                   ? "No mic retries left — submit your answer"
                   : micAttempts >= 1
@@ -674,13 +674,13 @@ export default function VivaPage() {
 
   if (step === "completed") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4 py-6 sm:p-6">
         <Card className="w-full max-w-md bg-zinc-800/80 border-zinc-700 shadow-2xl backdrop-blur text-center" data-testid="card-completion">
-          <CardContent className="pt-8 pb-6">
+          <CardContent className="pt-8 pb-6 px-4 sm:px-6">
             <div className="mx-auto mb-4 h-14 w-14 rounded-full bg-green-600/20 flex items-center justify-center">
               <CheckCircle2 className="h-8 w-8 text-green-500" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-1" data-testid="heading-complete">
+            <h2 className="text-xl sm:text-2xl font-bold text-white mb-1" data-testid="heading-complete">
               Exam Complete
             </h2>
             <p className="text-zinc-400 mb-6">
