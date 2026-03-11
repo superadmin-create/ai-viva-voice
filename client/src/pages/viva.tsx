@@ -686,14 +686,9 @@ export default function VivaPage() {
             <p className="text-zinc-400 mb-6">
               Thank you, {studentInfo.name}
             </p>
-            <p className="text-sm text-zinc-500 mb-6">
+            <p className="text-sm text-zinc-500">
               Your answers have been submitted and are being evaluated.
             </p>
-            <Link href="/">
-              <Button variant="outline" className="border-zinc-600 text-zinc-300 hover:bg-zinc-700" data-testid="button-home">
-                <ArrowLeft className="h-4 w-4 mr-2" /> Home
-              </Button>
-            </Link>
           </CardContent>
         </Card>
       </div>
