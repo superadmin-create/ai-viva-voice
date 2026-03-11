@@ -22,7 +22,7 @@ type SubjectInfo = {
   modules: { title: string; topics: string[] }[];
 };
 
-const MAX_RECORDING_MS = 30000;
+const MAX_RECORDING_MS = 45000;
 
 export default function VivaPage() {
   const [, params] = useRoute("/:subject");
@@ -662,7 +662,7 @@ export default function VivaPage() {
                   ? "No mic retries left — submit your answer"
                   : micAttempts >= 1
                   ? `${3 - micAttempts} ${3 - micAttempts === 1 ? 'retry' : 'retries'} remaining — click Stop when done speaking`
-                  : "Click Stop when you're done speaking, or it auto-stops after 30s"}
+                  : "Click Stop when you're done speaking, or it auto-stops after 45s"}
               </p>
             </CardContent>
           </Card>
