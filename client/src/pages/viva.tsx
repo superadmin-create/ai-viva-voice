@@ -428,12 +428,13 @@ export default function VivaPage() {
       setStep("preparing");
 
       const result = await generateQuestionsMutation.mutateAsync(subject);
-      setQuestions(result.questions);
+      const questionTexts = result.questions.map((q: any) => typeof q === "string" ? q : q.question);
+      setQuestions(questionTexts);
       setStep("exam");
 
-      if (result.questions.length > 0) {
+      if (questionTexts.length > 0) {
         try {
-          await speakTextAsync(result.questions[0]);
+          await speakTextAsync(questionTexts[0]);
         } catch {}
         try {
           await startListeningWithSilenceDetection();
