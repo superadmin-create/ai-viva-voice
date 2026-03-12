@@ -36,6 +36,7 @@ export interface IStorage {
   createManualQuestion(question: InsertManualQuestion): Promise<ManualQuestion>;
   getManualQuestionsBySubject(subjectSlug: string): Promise<ManualQuestion[]>;
   deleteManualQuestion(id: number): Promise<void>;
+  updateManualQuestion(id: number, questionText: string): Promise<ManualQuestion | undefined>;
 
   createSubjectDocument(doc: InsertSubjectDocument): Promise<SubjectDocument>;
   getDocumentsBySubject(subjectSlug: string): Promise<SubjectDocument[]>;
@@ -140,6 +141,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteManualQuestion(id: number): Promise<void> {
     await db.delete(manualQuestions).where(eq(manualQuestions.id, id));
+  }
+
+  async updateManualQuestion(id: number, questionText: string): Promise<ManualQuestion | undefined> {
+    const result = await db.update(manualQuestions).set({ questionText }).where(eq(manualQuestions.id, id)).returning();
+    return result[0];
   }
 
   async createSubjectDocument(doc: InsertSubjectDocument): Promise<SubjectDocument> {

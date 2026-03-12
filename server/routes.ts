@@ -393,6 +393,40 @@ export async function registerRoutes(
     }
   });
 
+  app.put("/api/admin/questions/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+      const { questionText } = req.body;
+      if (!questionText || !questionText.trim()) {
+        return res.status(400).json({ error: "Question text is required" });
+      }
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (currentUser?.role !== "admin") {
+        const allSubjectQuestions = await Promise.all(
+          (await storage.getSubjectsByCreator(req.session.userId!)).map(async s => {
+            const qs = await storage.getManualQuestionsBySubject(s.slug);
+            return qs.map(q => q.id);
+          })
+        );
+        const ownedQuestionIds = allSubjectQuestions.flat();
+        if (!ownedQuestionIds.includes(id)) {
+          return res.status(403).json({ error: "You can only edit questions from your own subjects" });
+        }
+      }
+      const updated = await storage.updateManualQuestion(id, questionText.trim());
+      if (!updated) {
+        return res.status(404).json({ error: "Question not found" });
+      }
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating question:", error);
+      res.status(500).json({ error: error.message || "Failed to update question" });
+    }
+  });
+
   // Upload document for a subject
   app.post("/api/admin/documents", requireAuth, (req: any, res, next) => {
     upload.single('file')(req, res, (err: any) => {

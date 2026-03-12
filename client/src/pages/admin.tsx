@@ -244,6 +244,27 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     },
   });
 
+  const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null);
+  const [editingQuestionText, setEditingQuestionText] = useState("");
+
+  const updateQuestionMutation = useMutation({
+    mutationFn: async ({ id, questionText }: { id: number; questionText: string }) => {
+      const response = await fetch(`/api/admin/questions/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionText }),
+      });
+      if (!response.ok) throw new Error("Failed to update question");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["questions", selectedSubjectSlug] });
+      toast.success("Question updated!");
+      setEditingQuestionId(null);
+      setEditingQuestionText("");
+    },
+  });
+
   const { data: adminUsers } = useQuery<AdminUser[]>({
     queryKey: ["admin-users"],
     queryFn: async () => {
@@ -758,12 +779,53 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                     <div className="space-y-2">
                       {questions && questions.length > 0 ? (
                         questions.map((q) => (
-                          <div key={q.id} className="flex items-center justify-between p-3 border rounded-lg">
-                            <p className="flex-1">{q.questionText}</p>
+                          <div key={q.id} className="flex items-start gap-2 p-3 border rounded-lg">
+                            {editingQuestionId === q.id ? (
+                              <div className="flex-1 space-y-2">
+                                <Textarea
+                                  value={editingQuestionText}
+                                  onChange={(e) => setEditingQuestionText(e.target.value)}
+                                  className="min-h-[60px] text-sm"
+                                  data-testid={`input-edit-question-${q.id}`}
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => updateQuestionMutation.mutate({ id: q.id, questionText: editingQuestionText })}
+                                    disabled={!editingQuestionText.trim() || updateQuestionMutation.isPending}
+                                    data-testid={`button-save-question-${q.id}`}
+                                  >
+                                    {updateQuestionMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                                    Save
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => { setEditingQuestionId(null); setEditingQuestionText(""); }}
+                                    data-testid={`button-cancel-edit-${q.id}`}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="flex-1">{q.questionText}</p>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => { setEditingQuestionId(q.id); setEditingQuestionText(q.questionText); }}
+                                  data-testid={`button-edit-question-${q.id}`}
+                                >
+                                  <Edit2 className="h-4 w-4 text-blue-500" />
+                                </Button>
+                              </>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => deleteQuestionMutation.mutate(q.id)}
+                              data-testid={`button-delete-question-${q.id}`}
                             >
                               <Trash2 className="h-4 w-4 text-red-500" />
                             </Button>
