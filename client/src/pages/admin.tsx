@@ -77,6 +77,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [filterDivision, setFilterDivision] = useState("");
   const [filterSubject, setFilterSubject] = useState("");
   const [filterDate, setFilterDate] = useState("");
+  const [filterUser, setFilterUser] = useState("");
 
   const { data: results, isLoading } = useQuery<VivaResult[]>({
     queryKey: ["admin-results"],
@@ -349,15 +350,24 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     });
   };
 
+  const subjectOwnerMap = new Map<string, string>();
+  (allSubjects || []).forEach(s => {
+    if (s.createdBy) subjectOwnerMap.set(s.slug, s.createdBy);
+  });
+
   const uniqueClasses = [...new Set((results || []).map(r => r.studentClass).filter(Boolean))].sort();
   const uniqueDivisions = [...new Set((results || []).map(r => r.studentDivision).filter(Boolean))].sort();
   const uniqueSubjectSlugs = [...new Set((results || []).map(r => r.subject))].sort();
-  const hasActiveFilters = filterClass || filterDivision || filterSubject || filterDate;
+  const hasActiveFilters = filterClass || filterDivision || filterSubject || filterDate || filterUser;
 
   const filteredResults = (results || []).filter(r => {
     if (filterClass && r.studentClass !== filterClass) return false;
     if (filterDivision && r.studentDivision !== filterDivision) return false;
     if (filterSubject && r.subject !== filterSubject) return false;
+    if (filterUser) {
+      const ownerId = subjectOwnerMap.get(r.subject);
+      if (ownerId !== filterUser) return false;
+    }
     if (filterDate) {
       const resultDate = new Date(r.timestamp).toISOString().split('T')[0];
       if (resultDate !== filterDate) return false;
@@ -502,14 +512,25 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs"
-                        onClick={() => { setFilterClass(""); setFilterDivision(""); setFilterSubject(""); setFilterDate(""); }}
+                        onClick={() => { setFilterClass(""); setFilterDivision(""); setFilterSubject(""); setFilterDate(""); setFilterUser(""); }}
                         data-testid="button-clear-filters"
                       >
                         <X className="h-3 w-3 mr-1" /> Clear all
                       </Button>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className={`grid grid-cols-2 ${isAdmin ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-2`}>
+                    {isAdmin && (
+                      <select
+                        value={filterUser}
+                        onChange={(e) => setFilterUser(e.target.value)}
+                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        data-testid="filter-user"
+                      >
+                        <option value="">All Users</option>
+                        {(adminUsers || []).map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+                      </select>
+                    )}
                     <select
                       value={filterClass}
                       onChange={(e) => setFilterClass(e.target.value)}
