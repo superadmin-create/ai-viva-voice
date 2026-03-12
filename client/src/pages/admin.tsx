@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy, Upload, FileText, Filter, X, Download } from "lucide-react";
+import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy, Upload, FileText, Filter, X, Download, Clock } from "lucide-react";
 import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -81,6 +81,10 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
 
   const { data: results, isLoading } = useQuery<VivaResult[]>({
     queryKey: ["admin-results"],
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      return data?.some(r => r.status === "evaluating") ? 5000 : false;
+    },
     queryFn: async () => {
       const response = await fetch("/api/admin/results");
       if (!response.ok) throw new Error("Failed to fetch results");
@@ -657,10 +661,17 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                               {new Date(result.timestamp).toLocaleDateString()}
                             </TableCell>
                             <TableCell>
-                              <Badge variant="default" className="bg-green-600">
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                Completed
-                              </Badge>
+                              {result.status === "evaluating" ? (
+                                <Badge variant="default" className="bg-yellow-500 text-black">
+                                  <Clock className="h-3 w-3 mr-1 animate-spin" />
+                                  In Progress
+                                </Badge>
+                              ) : (
+                                <Badge variant="default" className="bg-green-600">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Completed
+                                </Badge>
+                              )}
                             </TableCell>
                             <TableCell>
                               <button className="text-violet-600 hover:text-violet-800 text-sm font-medium">
