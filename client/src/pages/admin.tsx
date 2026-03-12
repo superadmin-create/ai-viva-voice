@@ -68,7 +68,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [showUserDialog, setShowUserDialog] = useState(false);
   const [showResetPasswordDialog, setShowResetPasswordDialog] = useState<string | null>(null);
   const [selectedSubjectSlug, setSelectedSubjectSlug] = useState<string | null>(null);
-  const [newSubject, setNewSubject] = useState({ name: "", slug: "", curriculum: "" });
+  const [newSubject, setNewSubject] = useState({ name: "", curriculum: "" });
   const [newQuestion, setNewQuestion] = useState("");
   const [newUser, setNewUser] = useState({ username: "", password: "", role: "admin" });
   const [resetPassword, setResetPassword] = useState("");
@@ -174,7 +174,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       queryClient.invalidateQueries({ queryKey: ["subjects"] });
       toast.success("Subject created successfully!");
       setShowSubjectDialog(false);
-      setNewSubject({ name: "", slug: "", curriculum: "" });
+      setNewSubject({ name: "", curriculum: "" });
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -343,9 +343,10 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       if (currentModule) curriculum.push(currentModule);
     }
 
+    const autoSlug = newSubject.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     createSubjectMutation.mutate({
       name: newSubject.name,
-      slug: newSubject.slug.toLowerCase().replace(/\s+/g, '-'),
+      slug: autoSlug,
       curriculum,
     });
   };
@@ -1013,16 +1014,11 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                 onChange={(e) => setNewSubject({ ...newSubject, name: e.target.value })}
                 data-testid="input-subject-name"
               />
-            </div>
-            <div>
-              <Label>URL Slug</Label>
-              <Input
-                placeholder="e.g., python"
-                value={newSubject.slug}
-                onChange={(e) => setNewSubject({ ...newSubject, slug: e.target.value })}
-                data-testid="input-subject-slug"
-              />
-              <p className="text-xs text-muted-foreground mt-1">Students will access via /{newSubject.slug || 'slug'}</p>
+              {newSubject.name && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Students will access via /{newSubject.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'slug'}
+                </p>
+              )}
             </div>
             <div>
               <Label>Curriculum Topics</Label>
@@ -1044,7 +1040,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSubjectDialog(false)}>Cancel</Button>
-            <Button onClick={handleCreateSubject} disabled={!newSubject.name || !newSubject.slug}>
+            <Button onClick={handleCreateSubject} disabled={!newSubject.name.trim()}>
               Create Subject
             </Button>
           </DialogFooter>
