@@ -105,6 +105,58 @@ Respond in JSON format: { "score": number, "feedback": string, "isCorrect": bool
   };
 }
 
+export async function evaluateAnswersBatch(
+  answers: Array<{ question: string; answer: string }>,
+  subjectSlug: string
+): Promise<AnswerEvaluation[]> {
+  const subjectContent = getSubjectContent(subjectSlug);
+  const subjectName = subjectContent?.name || subjectSlug;
+  const documentContext = await getDocumentContext(subjectSlug);
+
+  let systemPrompt = `You are an expert examiner evaluating student responses in ${subjectName}.`;
+
+  if (subjectContent) {
+    const contentPrompt = buildSubjectPrompt(subjectContent);
+    systemPrompt += `\n\nCourse Content for Reference:\n${contentPrompt}`;
+  }
+
+  if (documentContext) {
+    systemPrompt += `\n\nReference Material from Uploaded Documents:\n${documentContext}`;
+  }
+
+  systemPrompt += `\n\nYou will receive multiple question-answer pairs. Evaluate each one individually and provide:
+1. A score from 0-10 (be fair but rigorous)
+2. Constructive feedback explaining what was good and what could be improved
+3. Whether the answer demonstrates understanding of the concept
+
+Respond in JSON format: { "evaluations": [{ "score": number, "feedback": string, "isCorrect": boolean }, ...] }
+The evaluations array must be in the same order as the questions provided.`;
+
+  const qaList = answers.map((a, i) => `--- Answer ${i + 1} ---\nQuestion: ${a.question}\nStudent Answer: ${a.answer}`).join("\n\n");
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-5",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: `Evaluate all of the following answers:\n\n${qaList}` }
+    ],
+    response_format: { type: "json_object" }
+  });
+
+  const result = JSON.parse(response.choices[0].message.content || "{}");
+  const evaluations: AnswerEvaluation[] = (result.evaluations || []).map((e: any) => ({
+    score: e.score || 0,
+    feedback: e.feedback || "No feedback available",
+    isCorrect: e.isCorrect || false,
+  }));
+
+  while (evaluations.length < answers.length) {
+    evaluations.push({ score: 0, feedback: "Evaluation failed", isCorrect: false });
+  }
+
+  return evaluations;
+}
+
 export async function transcribeAudio(audioBuffer: Buffer, mimeType: string = "audio/webm"): Promise<string> {
   const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("mp4") ? "mp4" : "webm";
   const file = new File([audioBuffer], `audio.${ext}`, { type: mimeType });

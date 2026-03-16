@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { type Server } from "http";
 import { storage } from "./storage";
 import { insertVivaResultSchema, insertSubjectSchema, insertManualQuestionSchema } from "@shared/schema";
-import { generateVivaQuestions, evaluateAnswer, textToSpeech, transcribeAudio } from "./lib/openai-service";
+import { generateVivaQuestions, evaluateAnswer, evaluateAnswersBatch, textToSpeech, transcribeAudio } from "./lib/openai-service";
 import { syncVivaResultToSheet } from "./lib/google-sheets-service";
 import { getAllSubjects, getSubjectContent } from "./lib/subject-content";
 import { z } from "zod";
@@ -686,29 +686,16 @@ export async function registerRoutes(
       // Return immediately
       res.json({ success: true, id: result.id });
 
-      // Evaluate all answers in background
+      // Evaluate all answers in background using batch evaluation (single API call)
       (async () => {
         try {
-          const evaluatedTranscript = await Promise.all(
-            rawAnswers.map(async (ra: { question: string; answer: string }) => {
-              try {
-                const evaluation = await evaluateAnswer(ra.question, ra.answer, subject);
-                return {
-                  question: ra.question,
-                  answer: ra.answer,
-                  feedback: evaluation.feedback,
-                  score: evaluation.score,
-                };
-              } catch (e) {
-                return {
-                  question: ra.question,
-                  answer: ra.answer,
-                  feedback: "Evaluation failed",
-                  score: 5,
-                };
-              }
-            })
-          );
+          const evaluations = await evaluateAnswersBatch(rawAnswers, subject);
+          const evaluatedTranscript = rawAnswers.map((ra: { question: string; answer: string }, i: number) => ({
+            question: ra.question,
+            answer: ra.answer,
+            feedback: evaluations[i]?.feedback || "Evaluation failed",
+            score: evaluations[i]?.score || 0,
+          }));
 
           const totalScore = evaluatedTranscript.reduce((sum, t) => sum + t.score, 0);
           
