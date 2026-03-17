@@ -546,6 +546,17 @@ export default function VivaPage() {
                 </div>
               </div>
             </div>
+            <div className="bg-zinc-700/40 border border-zinc-600 rounded-lg p-3 sm:p-4 space-y-2" data-testid="instructions-panel">
+              <p className="text-sm font-semibold text-violet-400">Instructions:</p>
+              <ol className="text-xs sm:text-sm text-zinc-300 space-y-1.5 list-decimal list-outside pl-4">
+                <li>Give permission to the microphone</li>
+                <li>Make sure there is no background noise, in case of any noise interruption the Viva will stop</li>
+                <li>Viva has to be given in English, any other language will not be evaluated</li>
+                <li>Answer in detail, elaborate to get better marks (1 word answers will not get any marks)</li>
+                <li>In case you want to re-attempt the answer, you have 2 more attempts, click on Retry</li>
+                <li>Once you finish your answer, click on "Stop" and "Next" to proceed</li>
+              </ol>
+            </div>
             <Button
               onClick={sendOtpToEmail}
               className="w-full h-12 text-base bg-violet-600 hover:bg-violet-500 text-white"
@@ -556,9 +567,6 @@ export default function VivaPage() {
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending OTP...</>
               ) : "Verify Email & Start"}
             </Button>
-            <p className="text-xs text-zinc-500 text-center">
-              Make sure your microphone is enabled
-            </p>
           </CardContent>
         </Card>
         <audio ref={audioRef} hidden />
