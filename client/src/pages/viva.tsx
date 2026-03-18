@@ -661,12 +661,12 @@ export default function VivaPage() {
         <div className="container mx-auto max-w-3xl">
           <div className="mb-3 sm:mb-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs sm:text-sm text-zinc-400">Question {currentQuestionIndex + 1}/{questions.length}</span>
+              <span className="text-sm sm:text-base font-semibold text-white">Question {currentQuestionIndex + 1} <span className="text-zinc-400 font-normal">of {questions.length}</span></span>
               <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-400 max-w-[140px] sm:max-w-none truncate">
                 {displaySubjectName}
               </Badge>
             </div>
-            <Progress value={((currentQuestionIndex + 1) / questions.length) * 100} className="h-1.5 bg-zinc-700" />
+            <Progress value={((currentQuestionIndex + 1) / questions.length) * 100} className="h-2 bg-zinc-700" />
           </div>
 
           <Card className="bg-zinc-800/80 border-zinc-700 shadow-xl backdrop-blur" data-testid="card-question">
