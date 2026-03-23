@@ -59,7 +59,15 @@ export default function VivaPage() {
     return "register";
   });
   const setStep = useCallback(
-    (newStep: "register" | "otp" | "preparing" | "exam" | "completed" | "expired") => {
+    (
+      newStep:
+        | "register"
+        | "otp"
+        | "preparing"
+        | "exam"
+        | "completed"
+        | "expired",
+    ) => {
       setStepRaw(newStep);
       try {
         sessionStorage.setItem(`${sessionKey}_step`, newStep);
@@ -349,8 +357,13 @@ export default function VivaPage() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         clearSilenceTimer();
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-          try { mediaRecorderRef.current.stop(); } catch {}
+        if (
+          mediaRecorderRef.current &&
+          mediaRecorderRef.current.state !== "inactive"
+        ) {
+          try {
+            mediaRecorderRef.current.stop();
+          } catch {}
         }
         if (mediaStreamRef.current) {
           mediaStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -368,7 +381,8 @@ export default function VivaPage() {
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
-      e.returnValue = "Your viva is in progress. Leaving this page will end the exam.";
+      e.returnValue =
+        "Your viva is in progress. Leaving this page will end the exam.";
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -987,7 +1001,10 @@ export default function VivaPage() {
   if (step === "expired") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4 py-6 sm:p-6">
-        <Card className="w-full max-w-md bg-zinc-800/80 border-zinc-700 shadow-2xl backdrop-blur text-center" data-testid="card-expired">
+        <Card
+          className="w-full max-w-md bg-zinc-800/80 border-zinc-700 shadow-2xl backdrop-blur text-center"
+          data-testid="card-expired"
+        >
           <CardContent className="pt-8 pb-6 px-6 space-y-4">
             <div className="mx-auto w-16 h-16 rounded-full bg-red-600/20 flex items-center justify-center">
               <ArrowLeft className="h-8 w-8 text-red-400" />
@@ -995,10 +1012,12 @@ export default function VivaPage() {
             <div className="space-y-2">
               <h2 className="text-xl font-bold text-white">Viva Ended</h2>
               <p className="text-zinc-400 text-sm">
-                Your viva was terminated because you navigated away from this page.
+                Your viva was terminated because you navigated away from this
+                page.
               </p>
               <p className="text-zinc-500 text-xs">
-                Please contact your examiner to reschedule.
+                Refresh the page to attempt the viva again. DON'T LEAVE THE PAGE
+                WHILE GIVING THE VIVA.
               </p>
             </div>
           </CardContent>
