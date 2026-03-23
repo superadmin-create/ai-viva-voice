@@ -553,8 +553,7 @@ export default function VivaPage() {
                 <li>Make sure there is no background noise, in case of any noise interruption the Viva will stop</li>
                 <li>Viva has to be given in English, any other language will not be evaluated</li>
                 <li>Answer in detail, elaborate to get better marks (1 word answers will not get any marks)</li>
-                <li>In case you want to re-attempt the answer, you have 2 more attempts, click on Retry</li>
-                <li>Once you finish your answer, click on "Stop" and "Next" to proceed</li>
+                <li>Once the microphone stops recording, your answer will appear. Click "Next" to proceed to the next question</li>
               </ol>
             </div>
             <Button
@@ -684,7 +683,7 @@ export default function VivaPage() {
               <div>
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
                   <Label className="text-zinc-400 text-xs sm:text-sm">
-                    Your Answer {micAttempts > 0 && !isListening && !answerLocked && `(Attempt ${micAttempts}/3)`}
+                    Your Answer
                   </Label>
                   <div className="flex items-center gap-1.5 sm:gap-2">
                     {silenceCountdown !== null && isListening && (
@@ -715,19 +714,9 @@ export default function VivaPage() {
 
               <div className="flex gap-2">
                 <Button
-                  variant="outline"
-                  onClick={isListening ? stopListening : startListeningWithSilenceDetection}
-                  disabled={answerLocked || isTranscribing || (!isListening && micAttempts >= 3)}
-                  className={`h-11 sm:h-10 px-3 sm:px-4 border-zinc-600 text-sm ${isListening ? 'bg-red-600/20 text-red-400 border-red-600/40' : 'text-zinc-300 hover:bg-zinc-700'}`}
-                  data-testid="button-voice"
-                >
-                  <Mic className={`h-4 w-4 mr-1.5 ${isListening ? 'animate-pulse' : ''}`} />
-                  {isListening ? 'Stop' : micAttempts >= 3 ? 'No retries' : micAttempts >= 1 ? 'Retry' : 'Mic'}
-                </Button>
-                <Button
                   onClick={manualSubmitAnswer}
                   disabled={!currentAnswer.trim() || answerLocked || isTranscribing}
-                  className="flex-1 h-11 sm:h-10 bg-violet-600 hover:bg-violet-500 text-white text-sm disabled:opacity-40"
+                  className="w-full h-11 sm:h-10 bg-violet-600 hover:bg-violet-500 text-white text-sm disabled:opacity-40"
                   data-testid="button-submit-answer"
                 >
                   {answerLocked ? (
@@ -737,11 +726,7 @@ export default function VivaPage() {
               </div>
 
               <p className="text-[11px] sm:text-xs text-zinc-500 text-center">
-                {micAttempts >= 3
-                  ? "No mic retries left — submit your answer"
-                  : micAttempts >= 1
-                  ? `${3 - micAttempts} ${3 - micAttempts === 1 ? 'retry' : 'retries'} remaining — click Stop when done speaking`
-                  : "Click Stop when you're done speaking, or it auto-stops after 45s"}
+                {isListening ? "Microphone is on — speak your answer clearly" : isTranscribing ? "Processing your answer..." : "Microphone stopped — click Next when ready"}
               </p>
             </CardContent>
           </Card>
