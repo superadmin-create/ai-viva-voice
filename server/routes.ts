@@ -221,6 +221,7 @@ export async function registerRoutes(
           name: custom.name, 
           slug: custom.slug, 
           modules: custom.curriculum,
+          instructions: custom.instructions ?? null,
           isBuiltIn: false 
         });
       }
