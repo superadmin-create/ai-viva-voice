@@ -1,13 +1,32 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRoute, Link } from "wouter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Mic, Volume2, CheckCircle2, User, Mail, Phone, ArrowLeft, Clock, GraduationCap, Users, ShieldCheck } from "lucide-react";
+import {
+  Loader2,
+  Mic,
+  Volume2,
+  CheckCircle2,
+  User,
+  Mail,
+  Phone,
+  ArrowLeft,
+  Clock,
+  GraduationCap,
+  Users,
+  ShieldCheck,
+} from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -30,17 +49,24 @@ export default function VivaPage() {
 
   const sessionKey = `viva_${subject}`;
 
-  const [step, setStepRaw] = useState<"register" | "otp" | "preparing" | "exam" | "completed">(() => {
+  const [step, setStepRaw] = useState<
+    "register" | "otp" | "preparing" | "exam" | "completed" | "expired"
+  >(() => {
     try {
       const saved = sessionStorage.getItem(`${sessionKey}_step`);
       if (saved === "exam" || saved === "preparing") return saved;
     } catch {}
     return "register";
   });
-  const setStep = useCallback((newStep: "register" | "otp" | "preparing" | "exam" | "completed") => {
-    setStepRaw(newStep);
-    try { sessionStorage.setItem(`${sessionKey}_step`, newStep); } catch {}
-  }, [sessionKey]);
+  const setStep = useCallback(
+    (newStep: "register" | "otp" | "preparing" | "exam" | "completed" | "expired") => {
+      setStepRaw(newStep);
+      try {
+        sessionStorage.setItem(`${sessionKey}_step`, newStep);
+      } catch {}
+    },
+    [sessionKey],
+  );
 
   const [studentInfo, setStudentInfo] = useState(() => {
     try {
@@ -49,15 +75,20 @@ export default function VivaPage() {
     } catch {}
     return { name: "", email: "", phone: "", studentClass: "", division: "" };
   });
-  const updateStudentInfo = useCallback((info: typeof studentInfo) => {
-    setStudentInfo(info);
-    try { sessionStorage.setItem(`${sessionKey}_student`, JSON.stringify(info)); } catch {}
-  }, [sessionKey]);
+  const updateStudentInfo = useCallback(
+    (info: typeof studentInfo) => {
+      setStudentInfo(info);
+      try {
+        sessionStorage.setItem(`${sessionKey}_student`, JSON.stringify(info));
+      } catch {}
+    },
+    [sessionKey],
+  );
 
   const [otpValue, setOtpValue] = useState("");
   const [otpSending, setOtpSending] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
-  
+
   const [questions, setQuestions] = useState<string[]>(() => {
     try {
       const saved = sessionStorage.getItem(`${sessionKey}_questions`);
@@ -78,17 +109,26 @@ export default function VivaPage() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
-  
+
   const [isTranscribing, setIsTranscribing] = useState(false);
 
   useEffect(() => {
     try {
-      if (questions.length > 0) sessionStorage.setItem(`${sessionKey}_questions`, JSON.stringify(questions));
+      if (questions.length > 0)
+        sessionStorage.setItem(
+          `${sessionKey}_questions`,
+          JSON.stringify(questions),
+        );
     } catch {}
   }, [questions, sessionKey]);
 
   useEffect(() => {
-    try { sessionStorage.setItem(`${sessionKey}_qIndex`, String(currentQuestionIndex)); } catch {}
+    try {
+      sessionStorage.setItem(
+        `${sessionKey}_qIndex`,
+        String(currentQuestionIndex),
+      );
+    } catch {}
   }, [currentQuestionIndex, sessionKey]);
 
   useEffect(() => {
@@ -96,7 +136,9 @@ export default function VivaPage() {
       setStepRaw("exam");
     } else if (step === "preparing" && questions.length === 0) {
       setStepRaw("register");
-      try { sessionStorage.removeItem(`${sessionKey}_step`); } catch {}
+      try {
+        sessionStorage.removeItem(`${sessionKey}_step`);
+      } catch {}
     }
   }, []);
 
@@ -143,7 +185,13 @@ export default function VivaPage() {
   });
 
   const submitFastMutation = useMutation({
-    mutationFn: async (data: { studentName: string; studentEmail: string; studentPhone: string; subject: string; rawAnswers: RawAnswer[] }) => {
+    mutationFn: async (data: {
+      studentName: string;
+      studentEmail: string;
+      studentPhone: string;
+      subject: string;
+      rawAnswers: RawAnswer[];
+    }) => {
       const response = await fetch("/api/viva/submit-fast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -190,48 +238,56 @@ export default function VivaPage() {
     }
   }, [studentInfo, subject, submitFastMutation]);
 
-  const processAnswer = useCallback(async (answer: string, questionIndex: number) => {
-    if (!answer.trim() || isProcessingRef.current) return;
-    
-    isProcessingRef.current = true;
-    setAnswerLocked(true);
-    clearSilenceTimer();
-    autoListenRef.current = false;
-    
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      try { mediaRecorderRef.current.stop(); } catch (e) {}
-    }
-    setIsListening(false);
-    
-    const allQuestions = questionsRef.current;
-    
-    rawAnswersRef.current.push({
-      question: allQuestions[questionIndex],
-      answer: answer.trim(),
-    });
-    
-    if (questionIndex < allQuestions.length - 1) {
-      const nextIndex = questionIndex + 1;
-      setCurrentQuestionIndex(nextIndex);
-      setCurrentAnswer("");
-      setAnswerLocked(false);
-      setMicAttempts(0);
-      isProcessingRef.current = false;
-      
-      await speakTextAsync(allQuestions[nextIndex]);
-      startListeningWithSilenceDetection();
-    } else {
-      isProcessingRef.current = false;
-      await submitExam();
-    }
-  }, [clearSilenceTimer, submitExam]);
+  const processAnswer = useCallback(
+    async (answer: string, questionIndex: number) => {
+      if (!answer.trim() || isProcessingRef.current) return;
+
+      isProcessingRef.current = true;
+      setAnswerLocked(true);
+      clearSilenceTimer();
+      autoListenRef.current = false;
+
+      if (
+        mediaRecorderRef.current &&
+        mediaRecorderRef.current.state !== "inactive"
+      ) {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch (e) {}
+      }
+      setIsListening(false);
+
+      const allQuestions = questionsRef.current;
+
+      rawAnswersRef.current.push({
+        question: allQuestions[questionIndex],
+        answer: answer.trim(),
+      });
+
+      if (questionIndex < allQuestions.length - 1) {
+        const nextIndex = questionIndex + 1;
+        setCurrentQuestionIndex(nextIndex);
+        setCurrentAnswer("");
+        setAnswerLocked(false);
+        setMicAttempts(0);
+        isProcessingRef.current = false;
+
+        await speakTextAsync(allQuestions[nextIndex]);
+        startListeningWithSilenceDetection();
+      } else {
+        isProcessingRef.current = false;
+        await submitExam();
+      }
+    },
+    [clearSilenceTimer, submitExam],
+  );
 
   const startSilenceTimer = useCallback(() => {
     clearSilenceTimer();
-    
+
     setSilenceCountdown(MAX_RECORDING_MS / 1000);
     countdownIntervalRef.current = setInterval(() => {
-      setSilenceCountdown(prev => {
+      setSilenceCountdown((prev) => {
         if (prev === null || prev <= 1) return null;
         return prev - 1;
       });
@@ -239,7 +295,10 @@ export default function VivaPage() {
 
     silenceTimerRef.current = setTimeout(() => {
       clearSilenceTimer();
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      if (
+        mediaRecorderRef.current &&
+        mediaRecorderRef.current.state !== "inactive"
+      ) {
         mediaRecorderRef.current.stop();
       }
       setIsListening(false);
@@ -251,7 +310,11 @@ export default function VivaPage() {
     setIsTranscribing(true);
     try {
       const formData = new FormData();
-      const ext = audioBlob.type.includes("mp4") ? "mp4" : audioBlob.type.includes("wav") ? "wav" : "webm";
+      const ext = audioBlob.type.includes("mp4")
+        ? "mp4"
+        : audioBlob.type.includes("wav")
+          ? "wav"
+          : "webm";
       formData.append("audio", audioBlob, `recording.${ext}`);
       const response = await fetch("/api/viva/transcribe", {
         method: "POST",
@@ -274,11 +337,48 @@ export default function VivaPage() {
     return () => {
       clearSilenceTimer();
       if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(t => t.stop());
+        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
         mediaStreamRef.current = null;
       }
     };
   }, [clearSilenceTimer]);
+
+  useEffect(() => {
+    if (step !== "exam") return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        clearSilenceTimer();
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+          try { mediaRecorderRef.current.stop(); } catch {}
+        }
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+          mediaStreamRef.current = null;
+        }
+        try {
+          sessionStorage.removeItem(`${sessionKey}_step`);
+          sessionStorage.removeItem(`${sessionKey}_student`);
+          sessionStorage.removeItem(`${sessionKey}_questions`);
+          sessionStorage.removeItem(`${sessionKey}_qIndex`);
+        } catch {}
+        setStep("expired");
+      }
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "Your viva is in progress. Leaving this page will end the exam.";
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [step, sessionKey, clearSilenceTimer, setStep]);
 
   const startListeningWithSilenceDetection = useCallback(async () => {
     if (isProcessingRef.current) return;
@@ -289,16 +389,21 @@ export default function VivaPage() {
       setIsSpeaking(false);
     }
 
-    setMicAttempts(prev => prev + 1);
+    setMicAttempts((prev) => prev + 1);
     setCurrentAnswer("");
     autoListenRef.current = true;
 
     try {
       if (!mediaStreamRef.current) {
-        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
       }
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
-        : MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "";
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+          ? "audio/mp4"
+          : "";
       const recorder = mimeType
         ? new MediaRecorder(mediaStreamRef.current, { mimeType })
         : new MediaRecorder(mediaStreamRef.current);
@@ -329,7 +434,10 @@ export default function VivaPage() {
   const stopListening = useCallback(() => {
     autoListenRef.current = false;
     clearSilenceTimer();
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
       mediaRecorderRef.current.stop();
     }
     setIsListening(false);
@@ -347,7 +455,7 @@ export default function VivaPage() {
         if (!response.ok) throw new Error("TTS failed");
         const audioBlob = await response.blob();
         const audioUrl = URL.createObjectURL(audioBlob);
-        
+
         if (audioRef.current) {
           audioRef.current.src = audioUrl;
           audioRef.current.onended = () => {
@@ -368,7 +476,13 @@ export default function VivaPage() {
   }, []);
 
   const sendOtpToEmail = async () => {
-    if (!studentInfo.name || !studentInfo.email || !studentInfo.phone || !studentInfo.studentClass || !studentInfo.division) {
+    if (
+      !studentInfo.name ||
+      !studentInfo.email ||
+      !studentInfo.phone ||
+      !studentInfo.studentClass ||
+      !studentInfo.division
+    ) {
       toast.error("Please fill in all fields");
       return;
     }
@@ -419,7 +533,10 @@ export default function VivaPage() {
       const response = await fetch("/api/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: studentInfo.email, otp: otpValue.trim() }),
+        body: JSON.stringify({
+          email: studentInfo.email,
+          otp: otpValue.trim(),
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Invalid OTP");
@@ -428,7 +545,9 @@ export default function VivaPage() {
       setStep("preparing");
 
       const result = await generateQuestionsMutation.mutateAsync(subject);
-      const questionTexts = result.questions.map((q: any) => typeof q === "string" ? q : q.question);
+      const questionTexts = result.questions.map((q: any) =>
+        typeof q === "string" ? q : q.question,
+      );
       setQuestions(questionTexts);
       setStep("exam");
 
@@ -463,13 +582,23 @@ export default function VivaPage() {
   if (step === "register") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4 py-6 sm:p-6">
-        <Card className="w-full max-w-lg bg-zinc-800/80 border-zinc-700 shadow-2xl backdrop-blur" data-testid="card-registration">
+        <Card
+          className="w-full max-w-lg bg-zinc-800/80 border-zinc-700 shadow-2xl backdrop-blur"
+          data-testid="card-registration"
+        >
           <CardHeader className="text-center pb-2 px-4 sm:px-6">
-            <CardTitle className="text-2xl sm:text-3xl font-bold text-white" data-testid="heading-viva-title">
+            <CardTitle
+              className="text-2xl sm:text-3xl font-bold text-white"
+              data-testid="heading-viva-title"
+            >
               AI Mock Viva
             </CardTitle>
             <CardDescription>
-              <Badge variant="outline" className="text-sm sm:text-base px-3 sm:px-4 py-1 capitalize border-violet-500 text-violet-400" data-testid="badge-subject">
+              <Badge
+                variant="outline"
+                className="text-sm sm:text-base px-3 sm:px-4 py-1 capitalize border-violet-500 text-violet-400"
+                data-testid="badge-subject"
+              >
                 {displaySubjectName}
               </Badge>
             </CardDescription>
@@ -477,20 +606,28 @@ export default function VivaPage() {
           <CardContent className="space-y-4 sm:space-y-5 px-4 sm:px-6">
             <div className="space-y-3">
               <div className="space-y-1">
-                <Label htmlFor="name" className="text-zinc-300 flex items-center gap-2 text-sm">
+                <Label
+                  htmlFor="name"
+                  className="text-zinc-300 flex items-center gap-2 text-sm"
+                >
                   <User className="h-3.5 w-3.5" /> Full Name
                 </Label>
                 <Input
                   id="name"
                   placeholder="Enter your name"
                   value={studentInfo.name}
-                  onChange={(e) => updateStudentInfo({ ...studentInfo, name: e.target.value })}
+                  onChange={(e) =>
+                    updateStudentInfo({ ...studentInfo, name: e.target.value })
+                  }
                   className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                   data-testid="input-name"
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="email" className="text-zinc-300 flex items-center gap-2 text-sm">
+                <Label
+                  htmlFor="email"
+                  className="text-zinc-300 flex items-center gap-2 text-sm"
+                >
                   <Mail className="h-3.5 w-3.5" /> Email
                 </Label>
                 <Input
@@ -498,13 +635,18 @@ export default function VivaPage() {
                   type="email"
                   placeholder="Enter your email"
                   value={studentInfo.email}
-                  onChange={(e) => updateStudentInfo({ ...studentInfo, email: e.target.value })}
+                  onChange={(e) =>
+                    updateStudentInfo({ ...studentInfo, email: e.target.value })
+                  }
                   className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                   data-testid="input-email"
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="phone" className="text-zinc-300 flex items-center gap-2 text-sm">
+                <Label
+                  htmlFor="phone"
+                  className="text-zinc-300 flex items-center gap-2 text-sm"
+                >
                   <Phone className="h-3.5 w-3.5" /> Phone
                 </Label>
                 <Input
@@ -512,48 +654,87 @@ export default function VivaPage() {
                   type="tel"
                   placeholder="Enter your phone"
                   value={studentInfo.phone}
-                  onChange={(e) => updateStudentInfo({ ...studentInfo, phone: e.target.value })}
+                  onChange={(e) =>
+                    updateStudentInfo({ ...studentInfo, phone: e.target.value })
+                  }
                   className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                   data-testid="input-phone"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label htmlFor="studentClass" className="text-zinc-300 flex items-center gap-2 text-sm">
+                  <Label
+                    htmlFor="studentClass"
+                    className="text-zinc-300 flex items-center gap-2 text-sm"
+                  >
                     <GraduationCap className="h-3.5 w-3.5" /> Class
                   </Label>
                   <Input
                     id="studentClass"
                     placeholder="e.g., FY BMS"
                     value={studentInfo.studentClass}
-                    onChange={(e) => updateStudentInfo({ ...studentInfo, studentClass: e.target.value })}
+                    onChange={(e) =>
+                      updateStudentInfo({
+                        ...studentInfo,
+                        studentClass: e.target.value,
+                      })
+                    }
                     className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                     data-testid="input-class"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="division" className="text-zinc-300 flex items-center gap-2 text-sm">
+                  <Label
+                    htmlFor="division"
+                    className="text-zinc-300 flex items-center gap-2 text-sm"
+                  >
                     <Users className="h-3.5 w-3.5" /> Division
                   </Label>
                   <Input
                     id="division"
                     placeholder="e.g., A"
                     value={studentInfo.division}
-                    onChange={(e) => updateStudentInfo({ ...studentInfo, division: e.target.value })}
+                    onChange={(e) =>
+                      updateStudentInfo({
+                        ...studentInfo,
+                        division: e.target.value,
+                      })
+                    }
                     className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                     data-testid="input-division"
                   />
                 </div>
               </div>
             </div>
-            <div className="bg-zinc-700/40 border border-zinc-600 rounded-lg p-3 sm:p-4 space-y-2" data-testid="instructions-panel">
-              <p className="text-sm font-semibold text-violet-400">Instructions:</p>
+            <div
+              className="bg-zinc-700/40 border border-zinc-600 rounded-lg p-3 sm:p-4 space-y-2"
+              data-testid="instructions-panel"
+            >
+              <p className="text-sm font-semibold text-violet-400">
+                Instructions:
+              </p>
               <ol className="text-xs sm:text-sm text-zinc-300 space-y-1.5 list-decimal list-outside pl-4">
                 <li>Give permission to the microphone</li>
-                <li>Make sure there is no background noise, in case of any noise interruption the Viva will stop</li>
-                <li>Viva has to be given in English, any other language will not be evaluated</li>
-                <li>Answer in detail, elaborate to get better marks (1 word answers will not get any marks)</li>
-                <li>Once the microphone stops recording, your answer will appear. Click "Next" to proceed to the next question</li>
+                <li>
+                  Make sure there is no background noise, in case of any noise
+                  interruption the Viva will stop
+                </li>
+                <li>
+                  Viva has to be given in English, any other language will not
+                  be evaluated
+                </li>
+                <li>
+                  Answer in detail, elaborate to get better marks (1 word
+                  answers will not get any marks)
+                </li>
+                <li>
+                  Once the microphone stops recording, your answer will appear.
+                  Click "Next" to proceed to the next question
+                </li>
+                <li>
+                  Do not switch tabs or navigate away — the viva will end
+                  automatically if you leave this page
+                </li>
               </ol>
             </div>
             <Button
@@ -563,8 +744,13 @@ export default function VivaPage() {
               data-testid="button-start-exam"
             >
               {otpSending ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending OTP...</>
-              ) : "Verify Email & Start"}
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending
+                  OTP...
+                </>
+              ) : (
+                "Verify Email & Start"
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -581,9 +767,17 @@ export default function VivaPage() {
             <div className="mx-auto w-12 h-12 rounded-full bg-violet-600/20 flex items-center justify-center mb-2">
               <ShieldCheck className="h-6 w-6 text-violet-400" />
             </div>
-            <CardTitle className="text-xl text-white" data-testid="text-otp-title">Verify Your Email</CardTitle>
+            <CardTitle
+              className="text-xl text-white"
+              data-testid="text-otp-title"
+            >
+              Verify Your Email
+            </CardTitle>
             <p className="text-sm text-zinc-400">
-              We've sent a 6-digit OTP to <span className="text-violet-400 font-medium break-all">{studentInfo.email}</span>
+              We've sent a 6-digit OTP to{" "}
+              <span className="text-violet-400 font-medium break-all">
+                {studentInfo.email}
+              </span>
             </p>
           </CardHeader>
           <CardContent className="space-y-4 px-4 sm:px-6">
@@ -591,7 +785,9 @@ export default function VivaPage() {
               <Label className="text-zinc-300 text-sm">Enter OTP</Label>
               <Input
                 value={otpValue}
-                onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onChange={(e) =>
+                  setOtpValue(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
                 placeholder="Enter 6-digit OTP"
                 className="bg-zinc-700/50 border-zinc-600 text-white text-center text-lg tracking-[0.5em] placeholder:tracking-normal placeholder:text-sm h-12"
                 maxLength={6}
@@ -606,14 +802,21 @@ export default function VivaPage() {
               data-testid="button-verify-otp"
             >
               {otpVerifying ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</>
-              ) : "Verify & Start Exam"}
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...
+                </>
+              ) : (
+                "Verify & Start Exam"
+              )}
             </Button>
             <div className="flex items-center justify-between">
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => { setStep("register"); setOtpValue(""); }}
+                onClick={() => {
+                  setStep("register");
+                  setOtpValue("");
+                }}
                 className="text-zinc-400 hover:text-white h-10 px-3"
                 data-testid="button-back-to-register"
               >
@@ -627,12 +830,15 @@ export default function VivaPage() {
                 className="text-violet-400 hover:text-violet-300 h-10 px-3"
                 data-testid="button-resend-otp"
               >
-                {otpSending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                {otpSending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : null}
                 Resend OTP
               </Button>
             </div>
             <p className="text-xs text-zinc-500 text-center">
-              OTP is valid for 5 minutes. Check your spam folder if you don't see it.
+              OTP is valid for 5 minutes. Check your spam folder if you don't
+              see it.
             </p>
           </CardContent>
         </Card>
@@ -646,7 +852,9 @@ export default function VivaPage() {
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4 py-6 sm:p-6">
         <div className="text-center">
           <Loader2 className="h-10 w-10 animate-spin mx-auto text-violet-500 mb-3" />
-          <p className="text-base sm:text-lg text-white font-medium">Preparing questions...</p>
+          <p className="text-base sm:text-lg text-white font-medium">
+            Preparing questions...
+          </p>
           <p className="text-sm text-zinc-400">{displaySubjectName}</p>
         </div>
         <audio ref={audioRef} hidden />
@@ -660,21 +868,42 @@ export default function VivaPage() {
         <div className="container mx-auto max-w-3xl">
           <div className="mb-3 sm:mb-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm sm:text-base font-semibold text-white">Question {currentQuestionIndex + 1} <span className="text-zinc-400 font-normal">of {questions.length}</span></span>
-              <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-400 max-w-[140px] sm:max-w-none truncate">
+              <span className="text-sm sm:text-base font-semibold text-white">
+                Question {currentQuestionIndex + 1}{" "}
+                <span className="text-zinc-400 font-normal">
+                  of {questions.length}
+                </span>
+              </span>
+              <Badge
+                variant="outline"
+                className="text-xs border-zinc-600 text-zinc-400 max-w-[140px] sm:max-w-none truncate"
+              >
                 {displaySubjectName}
               </Badge>
             </div>
-            <Progress value={((currentQuestionIndex + 1) / questions.length) * 100} className="h-2 bg-zinc-700" />
+            <Progress
+              value={((currentQuestionIndex + 1) / questions.length) * 100}
+              className="h-2 bg-zinc-700"
+            />
           </div>
 
-          <Card className="bg-zinc-800/80 border-zinc-700 shadow-xl backdrop-blur" data-testid="card-question">
+          <Card
+            className="bg-zinc-800/80 border-zinc-700 shadow-xl backdrop-blur"
+            data-testid="card-question"
+          >
             <CardHeader className="pb-3 px-4 sm:px-6">
               <div className="flex items-start gap-2.5 sm:gap-3">
-                <div className={`p-2 sm:p-2.5 rounded-full shrink-0 ${isSpeaking ? 'bg-violet-600 animate-pulse' : 'bg-zinc-700'}`}>
-                  <Volume2 className={`h-4 w-4 sm:h-5 sm:w-5 ${isSpeaking ? 'text-white' : 'text-zinc-400'}`} />
+                <div
+                  className={`p-2 sm:p-2.5 rounded-full shrink-0 ${isSpeaking ? "bg-violet-600 animate-pulse" : "bg-zinc-700"}`}
+                >
+                  <Volume2
+                    className={`h-4 w-4 sm:h-5 sm:w-5 ${isSpeaking ? "text-white" : "text-zinc-400"}`}
+                  />
                 </div>
-                <CardTitle className="text-base sm:text-lg text-white font-medium leading-relaxed" data-testid="text-current-question">
+                <CardTitle
+                  className="text-base sm:text-lg text-white font-medium leading-relaxed"
+                  data-testid="text-current-question"
+                >
                   {questions[currentQuestionIndex]}
                 </CardTitle>
               </div>
@@ -688,12 +917,14 @@ export default function VivaPage() {
                   <div className="flex items-center gap-1.5 sm:gap-2">
                     {silenceCountdown !== null && isListening && (
                       <Badge className="bg-amber-600/20 text-amber-400 border-amber-600/30 text-[10px] sm:text-xs px-1.5 sm:px-2">
-                        <Clock className="h-3 w-3 mr-0.5 sm:mr-1" /> {silenceCountdown}s left
+                        <Clock className="h-3 w-3 mr-0.5 sm:mr-1" />{" "}
+                        {silenceCountdown}s left
                       </Badge>
                     )}
                     {isTranscribing && (
                       <Badge className="bg-blue-600/20 text-blue-400 border-blue-600/30 animate-pulse text-[10px] sm:text-xs px-1.5 sm:px-2">
-                        <Loader2 className="h-3 w-3 mr-0.5 sm:mr-1 animate-spin" /> Transcribing...
+                        <Loader2 className="h-3 w-3 mr-0.5 sm:mr-1 animate-spin" />{" "}
+                        Transcribing...
                       </Badge>
                     )}
                     {isListening && (
@@ -706,8 +937,12 @@ export default function VivaPage() {
                 <Textarea
                   value={currentAnswer}
                   readOnly
-                  placeholder={isTranscribing ? "Transcribing your answer..." : "Your spoken answer will appear here..."}
-                  className={`min-h-[100px] sm:min-h-[120px] bg-zinc-700/50 border-zinc-600 text-white text-sm sm:text-base placeholder:text-zinc-500 resize-none cursor-default ${answerLocked ? 'opacity-70' : ''}`}
+                  placeholder={
+                    isTranscribing
+                      ? "Transcribing your answer..."
+                      : "Your spoken answer will appear here after the entire answer is complete..."
+                  }
+                  className={`min-h-[100px] sm:min-h-[120px] bg-zinc-700/50 border-zinc-600 text-white text-sm sm:text-base placeholder:text-zinc-500 resize-none cursor-default ${answerLocked ? "opacity-70" : ""}`}
                   data-testid="input-answer"
                 />
               </div>
@@ -715,18 +950,31 @@ export default function VivaPage() {
               <div className="flex gap-2">
                 <Button
                   onClick={manualSubmitAnswer}
-                  disabled={!currentAnswer.trim() || answerLocked || isTranscribing}
+                  disabled={
+                    !currentAnswer.trim() || answerLocked || isTranscribing
+                  }
                   className="w-full h-11 sm:h-10 bg-violet-600 hover:bg-violet-500 text-white text-sm disabled:opacity-40"
                   data-testid="button-submit-answer"
                 >
                   {answerLocked ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
-                  ) : currentQuestionIndex < questions.length - 1 ? "Next" : "Finish"}
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                      Submitting...
+                    </>
+                  ) : currentQuestionIndex < questions.length - 1 ? (
+                    "Next"
+                  ) : (
+                    "Finish"
+                  )}
                 </Button>
               </div>
 
               <p className="text-[11px] sm:text-xs text-zinc-500 text-center">
-                {isListening ? "Microphone is on — speak your answer clearly" : isTranscribing ? "Processing your answer..." : "Microphone stopped — click Next when ready"}
+                {isListening
+                  ? "Microphone is on — speak your answer clearly"
+                  : isTranscribing
+                    ? "Processing your answer..."
+                    : "Microphone stopped — click Next when ready"}
               </p>
             </CardContent>
           </Card>
@@ -736,20 +984,47 @@ export default function VivaPage() {
     );
   }
 
+  if (step === "expired") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4 py-6 sm:p-6">
+        <Card className="w-full max-w-md bg-zinc-800/80 border-zinc-700 shadow-2xl backdrop-blur text-center" data-testid="card-expired">
+          <CardContent className="pt-8 pb-6 px-6 space-y-4">
+            <div className="mx-auto w-16 h-16 rounded-full bg-red-600/20 flex items-center justify-center">
+              <ArrowLeft className="h-8 w-8 text-red-400" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold text-white">Viva Ended</h2>
+              <p className="text-zinc-400 text-sm">
+                Your viva was terminated because you navigated away from this page.
+              </p>
+              <p className="text-zinc-500 text-xs">
+                Please contact your examiner to reschedule.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (step === "completed") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4 py-6 sm:p-6">
-        <Card className="w-full max-w-md bg-zinc-800/80 border-zinc-700 shadow-2xl backdrop-blur text-center" data-testid="card-completion">
+        <Card
+          className="w-full max-w-md bg-zinc-800/80 border-zinc-700 shadow-2xl backdrop-blur text-center"
+          data-testid="card-completion"
+        >
           <CardContent className="pt-8 pb-6 px-4 sm:px-6">
             <div className="mx-auto mb-4 h-14 w-14 rounded-full bg-green-600/20 flex items-center justify-center">
               <CheckCircle2 className="h-8 w-8 text-green-500" />
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-white mb-1" data-testid="heading-complete">
+            <h2
+              className="text-xl sm:text-2xl font-bold text-white mb-1"
+              data-testid="heading-complete"
+            >
               Exam Complete
             </h2>
-            <p className="text-zinc-400 mb-6">
-              Thank you, {studentInfo.name}
-            </p>
+            <p className="text-zinc-400 mb-6">Thank you, {studentInfo.name}</p>
             <p className="text-sm text-zinc-500">
               Your answers have been submitted and are being evaluated.
             </p>
