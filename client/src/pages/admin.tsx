@@ -68,7 +68,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [showUserDialog, setShowUserDialog] = useState(false);
   const [showResetPasswordDialog, setShowResetPasswordDialog] = useState<string | null>(null);
   const [selectedSubjectSlug, setSelectedSubjectSlug] = useState<string | null>(null);
-  const [newSubject, setNewSubject] = useState({ name: "", curriculum: "" });
+  const [newSubject, setNewSubject] = useState({ name: "", curriculum: "", instructions: "" });
   const [newQuestion, setNewQuestion] = useState("");
   const [newUser, setNewUser] = useState({ username: "", password: "", role: "admin" });
   const [resetPassword, setResetPassword] = useState("");
@@ -178,7 +178,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       queryClient.invalidateQueries({ queryKey: ["subjects"] });
       toast.success("Subject created successfully!");
       setShowSubjectDialog(false);
-      setNewSubject({ name: "", curriculum: "" });
+      setNewSubject({ name: "", curriculum: "", instructions: "" });
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -373,6 +373,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       name: newSubject.name,
       slug: autoSlug,
       curriculum,
+      ...(newSubject.instructions.trim() ? { instructions: newSubject.instructions.trim() } : {}),
     });
   };
 
@@ -1109,6 +1110,22 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                 <p className="text-xs font-medium mb-1">Example:</p>
                 <pre className="text-xs text-muted-foreground whitespace-pre-wrap">{'Module 1: Basics:\nVariables and data types\nInput and output\n\nModule 2: Control Flow:\nIf/else statements\nLoops and iteration'}</pre>
               </div>
+            </div>
+            <div>
+              <Label>
+                Exam Instructions{" "}
+                <span className="text-muted-foreground font-normal">(Optional)</span>
+              </Label>
+              <Textarea
+                placeholder={"e.g.:\nFocus only on practical application questions.\nScore strictly — penalise vague or one-word answers.\nAlways include one question on error handling."}
+                value={newSubject.instructions}
+                onChange={(e) => setNewSubject({ ...newSubject, instructions: e.target.value })}
+                className="min-h-[100px] text-sm"
+                data-testid="input-exam-instructions"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                These instructions are passed directly to the AI to control how it generates questions and evaluates answers for this subject.
+              </p>
             </div>
           </div>
           <DialogFooter>

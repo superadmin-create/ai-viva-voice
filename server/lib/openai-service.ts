@@ -22,6 +22,7 @@ async function getDocumentContext(subjectSlug: string): Promise<string> {
 export async function generateVivaQuestions(subjectSlug: string, count: number = 5): Promise<string[]> {
   const subjectContent = getSubjectContent(subjectSlug);
   const documentContext = await getDocumentContext(subjectSlug);
+  const subjectRecord = await storage.getSubjectBySlug(subjectSlug);
   
   let prompt: string;
   
@@ -34,6 +35,10 @@ export async function generateVivaQuestions(subjectSlug: string, count: number =
 
   if (documentContext) {
     prompt += `\n\nAlso use the following reference material from uploaded documents to form relevant questions:\n\n${documentContext}`;
+  }
+
+  if (subjectRecord?.instructions?.trim()) {
+    prompt += `\n\nSpecial exam instructions from the examiner (follow these strictly when generating questions):\n${subjectRecord.instructions.trim()}`;
   }
 
   prompt += `\n\nReturn JSON: {"questions":["q1","q2",...]}`;
@@ -112,6 +117,7 @@ export async function evaluateAnswersBatch(
   const subjectContent = getSubjectContent(subjectSlug);
   const subjectName = subjectContent?.name || subjectSlug;
   const documentContext = await getDocumentContext(subjectSlug);
+  const subjectRecord = await storage.getSubjectBySlug(subjectSlug);
 
   let systemPrompt = `You are an expert examiner evaluating student responses in ${subjectName}.`;
 
@@ -122,6 +128,10 @@ export async function evaluateAnswersBatch(
 
   if (documentContext) {
     systemPrompt += `\n\nReference Material from Uploaded Documents:\n${documentContext}`;
+  }
+
+  if (subjectRecord?.instructions?.trim()) {
+    systemPrompt += `\n\nSpecial exam instructions from the examiner (follow these strictly when evaluating):\n${subjectRecord.instructions.trim()}`;
   }
 
   systemPrompt += `\n\nYou will receive multiple question-answer pairs. Evaluate each one individually and provide:
