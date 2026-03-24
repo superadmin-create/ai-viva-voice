@@ -727,6 +727,10 @@ export default function VivaPage() {
               <ol className="text-xs sm:text-sm text-zinc-300 space-y-1.5 list-decimal list-outside pl-4">
                 <li>Give permission to the microphone</li>
                 <li>
+                  Do not switch tabs or navigate away — the viva will end
+                  automatically if you leave this page
+                </li>
+                <li>
                   Make sure there is no background noise, in case of any noise
                   interruption the Viva will stop
                 </li>
@@ -741,10 +745,6 @@ export default function VivaPage() {
                 <li>
                   Once the microphone stops recording, your answer will appear.
                   Click "Next" to proceed to the next question
-                </li>
-                <li>
-                  Do not switch tabs or navigate away — the viva will end
-                  automatically if you leave this page
                 </li>
               </ol>
             </div>
@@ -972,9 +972,7 @@ export default function VivaPage() {
                 )}
                 <Button
                   onClick={manualSubmitAnswer}
-                  disabled={
-                    isListening || answerLocked || isTranscribing
-                  }
+                  disabled={isListening || answerLocked || isTranscribing}
                   className="w-full h-11 sm:h-10 bg-violet-600 hover:bg-violet-500 text-white text-sm disabled:opacity-40"
                   data-testid="button-submit-answer"
                 >
