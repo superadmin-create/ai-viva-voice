@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Loader2,
   Mic,
+  MicOff,
   Volume2,
   CheckCircle2,
   User,
@@ -962,6 +963,17 @@ export default function VivaPage() {
               </div>
 
               <div className="flex gap-2">
+                {isListening && (
+                  <Button
+                    onClick={stopListening}
+                    variant="outline"
+                    className="h-11 sm:h-10 border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 text-sm shrink-0"
+                    data-testid="button-stop-recording"
+                  >
+                    <MicOff className="h-4 w-4 mr-1.5" />
+                    Stop
+                  </Button>
+                )}
                 <Button
                   onClick={manualSubmitAnswer}
                   disabled={
