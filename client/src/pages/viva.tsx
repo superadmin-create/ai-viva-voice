@@ -585,10 +585,6 @@ export default function VivaPage() {
   };
 
   const manualSubmitAnswer = () => {
-    if (!currentAnswer.trim()) {
-      toast.error("Please provide an answer");
-      return;
-    }
     processAnswer(currentAnswer, currentQuestionIndex);
   };
 
@@ -977,7 +973,7 @@ export default function VivaPage() {
                 <Button
                   onClick={manualSubmitAnswer}
                   disabled={
-                    !currentAnswer.trim() || answerLocked || isTranscribing
+                    isListening || answerLocked || isTranscribing
                   }
                   className="w-full h-11 sm:h-10 bg-violet-600 hover:bg-violet-500 text-white text-sm disabled:opacity-40"
                   data-testid="button-submit-answer"
