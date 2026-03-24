@@ -23,6 +23,7 @@ import {
   Mail,
   Phone,
   ArrowLeft,
+  RefreshCw,
   Clock,
   GraduationCap,
   Users,
@@ -1011,21 +1012,24 @@ export default function VivaPage() {
           className="w-full max-w-md bg-zinc-800/80 border-zinc-700 shadow-2xl backdrop-blur text-center"
           data-testid="card-expired"
         >
-          <CardContent className="pt-8 pb-6 px-6 space-y-4">
-            <div className="mx-auto w-16 h-16 rounded-full bg-red-600/20 flex items-center justify-center">
-              <ArrowLeft className="h-8 w-8 text-red-400" />
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-xl font-bold text-white">Viva Ended</h2>
-              <p className="text-zinc-400 text-sm">
-                Your viva was terminated because you navigated away from this
-                page.
+          <CardContent className="pt-8 pb-8 px-6 space-y-6">
+            <div className="space-y-3">
+              <h2 className="text-4xl font-extrabold text-red-500">Viva Ended</h2>
+              <p className="text-zinc-300 text-base">
+                Your viva was terminated because you navigated away from this page.
               </p>
-              <p className="text-zinc-500 text-xs">
-                Refresh the page to attempt the viva again. DON'T LEAVE THE PAGE
-                WHILE GIVING THE VIVA.
+              <p className="text-red-400 text-lg font-bold uppercase tracking-wide">
+                Don't leave the page while giving the viva.
               </p>
             </div>
+            <Button
+              data-testid="btn-refresh"
+              onClick={() => window.location.reload()}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 text-base"
+            >
+              <RefreshCw className="h-5 w-5 mr-2" />
+              Refresh Page
+            </Button>
           </CardContent>
         </Card>
       </div>
