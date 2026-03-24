@@ -249,7 +249,7 @@ export default function VivaPage() {
 
   const processAnswer = useCallback(
     async (answer: string, questionIndex: number) => {
-      if (!answer.trim() || isProcessingRef.current) return;
+      if (isProcessingRef.current) return;
 
       isProcessingRef.current = true;
       setAnswerLocked(true);
