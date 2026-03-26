@@ -578,17 +578,20 @@ export async function registerRoutes(
 
       // First check for manual questions
       const manualQuestions = await storage.getManualQuestionsBySubject(subject);
-      
+
+      const shuffle = <T>(arr: T[]): T[] =>
+        arr.map(v => ({ v, sort: Math.random() })).sort((a, b) => a.sort - b.sort).map(({ v }) => v);
+
       if (manualQuestions.length >= (count || 5)) {
-        // Use manual questions only
-        const questions = manualQuestions.slice(0, count || 5).map(q => q.questionText);
+        // Use manual questions only, shuffled
+        const questions = shuffle(manualQuestions).slice(0, count || 5).map(q => q.questionText);
         return res.json({ questions });
       } else if (manualQuestions.length > 0) {
-        // Mix manual and AI questions
-        const manualTexts = manualQuestions.map(q => q.questionText);
-        const aiCount = (count || 5) - manualQuestions.length;
+        // Mix manual and AI questions, shuffle the whole set
+        const manualTexts = shuffle(manualQuestions).map(q => q.questionText);
+        const aiCount = (count || 5) - manualTexts.length;
         const aiQuestions = await generateVivaQuestions(subject, aiCount);
-        return res.json({ questions: [...manualTexts, ...aiQuestions] });
+        return res.json({ questions: shuffle([...manualTexts, ...aiQuestions]) });
       }
 
       // All AI questions
