@@ -951,14 +951,19 @@ export default function VivaPage() {
                   className="flex items-end justify-center gap-[3px] sm:gap-1 h-[100px] sm:h-[120px] bg-zinc-700/50 border border-zinc-600 rounded-md px-4 py-3"
                 >
                   {isTranscribing ? (
-                    <div className="flex items-center gap-3 h-full">
-                      {[0, 1, 2].map((i) => (
-                        <div
-                          key={i}
-                          className="w-3 h-3 bg-blue-400 rounded-full animate-bounce"
-                          style={{ animationDelay: `${i * 0.18}s` }}
-                        />
-                      ))}
+                    <div className="flex flex-col items-center justify-center gap-4 h-full">
+                      <div className="flex items-center gap-3">
+                        {[0, 1, 2].map((i) => (
+                          <div
+                            key={i}
+                            className="w-3 h-3 bg-blue-400 rounded-full animate-bounce"
+                            style={{ animationDelay: `${i * 0.18}s` }}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-blue-400 text-xs font-medium">
+                        Processing your answer...
+                      </p>
                     </div>
                   ) : (
                     <>
