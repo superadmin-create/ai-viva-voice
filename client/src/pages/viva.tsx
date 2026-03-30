@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Loader2,
   Mic,
@@ -946,17 +945,47 @@ export default function VivaPage() {
                     )}
                   </div>
                 </div>
-                <Textarea
-                  value={currentAnswer}
-                  readOnly
-                  placeholder={
-                    isTranscribing
-                      ? "Transcribing your answer..."
-                      : "Your spoken answer will appear here after the entire answer is complete..."
-                  }
-                  className={`min-h-[100px] sm:min-h-[120px] bg-zinc-700/50 border-zinc-600 text-white text-sm sm:text-base placeholder:text-zinc-500 resize-none cursor-default ${answerLocked ? "opacity-70" : ""}`}
-                  data-testid="input-answer"
-                />
+                {/* Waveform / transcribing visual */}
+                <div
+                  data-testid="waveform-display"
+                  className="flex items-end justify-center gap-[3px] sm:gap-1 h-[100px] sm:h-[120px] bg-zinc-700/50 border border-zinc-600 rounded-md px-4 py-3"
+                >
+                  {isTranscribing ? (
+                    <div className="flex items-center gap-3 h-full">
+                      {[0, 1, 2].map((i) => (
+                        <div
+                          key={i}
+                          className="w-3 h-3 bg-blue-400 rounded-full animate-bounce"
+                          style={{ animationDelay: `${i * 0.18}s` }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      {[20, 32, 48, 36, 56, 44, 64, 44, 56, 36, 48, 32, 20].map(
+                        (maxH, i) => (
+                          <div
+                            key={i}
+                            className={`w-1.5 sm:w-2 rounded-full ${
+                              isListening
+                                ? "bg-violet-400 waveform-bar"
+                                : "bg-zinc-500 opacity-20"
+                            }`}
+                            style={
+                              isListening
+                                ? {
+                                    height: `${maxH}px`,
+                                    animationDuration: `${0.45 + (i % 4) * 0.1}s`,
+                                    animationDelay: `${i * 0.07}s`,
+                                  }
+                                : { height: "4px" }
+                            }
+                          />
+                        )
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-2">
