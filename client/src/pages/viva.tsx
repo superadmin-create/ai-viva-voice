@@ -725,26 +725,26 @@ export default function VivaPage() {
                 Instructions:
               </p>
               <ol className="text-xs sm:text-sm text-zinc-300 space-y-1.5 list-decimal list-outside pl-4">
-                <li>Give permission to the microphone</li>
+                <li>Please allow microphone access to enable voice input.</li>
                 <li>
                   Do not switch tabs or navigate away — the viva will end
-                  automatically if you leave this page
+                  automatically if you leave this page.
                 </li>
                 <li>
                   Make sure there is no background noise, in case of any noise
-                  interruption the Viva will stop
+                  interruption the Viva will stop.
                 </li>
                 <li>
                   Viva has to be given in English, any other language will not
-                  be evaluated
+                  be evaluated.
                 </li>
                 <li>
-                  Answer in detail, elaborate to get better marks (1 word
+                  Answer in detail, elaborate to get better marks. (1 word
                   answers will not get any marks)
                 </li>
                 <li>
                   Once the microphone stops recording, your answer will appear.
-                  Click "Next" to proceed to the next question
+                  Click "Next" to proceed to the next question.
                 </li>
               </ol>
             </div>
@@ -922,9 +922,7 @@ export default function VivaPage() {
             <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6">
               <div>
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
-                  <Label className="text-zinc-400 text-xs sm:text-sm">
-                    Your Answer
-                  </Label>
+                  <Label className="text-zinc-400 text-xs sm:text-sm"></Label>
                   <div className="flex items-center gap-1.5 sm:gap-2">
                     {silenceCountdown !== null && isListening && (
                       <Badge className="bg-amber-600/20 text-amber-400 border-amber-600/30 text-[10px] sm:text-xs px-1.5 sm:px-2">
@@ -986,7 +984,7 @@ export default function VivaPage() {
                                 : { height: "4px" }
                             }
                           />
-                        )
+                        ),
                       )}
                     </>
                   )}
@@ -1048,12 +1046,14 @@ export default function VivaPage() {
         >
           <CardContent className="pt-8 pb-8 px-6 space-y-6">
             <div className="space-y-3">
-              <h2 className="text-4xl font-extrabold text-red-500">Viva Ended</h2>
+              <h2 className="text-4xl font-extrabold text-red-500">
+                Viva Ended
+              </h2>
               <p className="text-zinc-300 text-base">
-                Your viva was terminated because you navigated away from this page.
+                Your viva was terminated because you navigated away from this
+                page.
               </p>
               <p className="text-red-400 text-lg font-bold uppercase tracking-wide">
-                Don't leave the page while giving the viva.
               </p>
             </div>
             <Button
