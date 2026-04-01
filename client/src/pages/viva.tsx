@@ -554,7 +554,7 @@ export default function VivaPage() {
       const response = await fetch("/api/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: studentInfo.email }),
+        body: JSON.stringify({ email: studentInfo.email, subject }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to send OTP");
