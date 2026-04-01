@@ -529,12 +529,46 @@ export async function registerRoutes(
     }
   });
 
+  // Record a terminated viva attempt (tab-switch / navigation away)
+  app.post("/api/viva/record-terminated", async (req, res) => {
+    try {
+      const { studentName, studentEmail, studentPhone, studentClass, studentDivision, subject } = req.body;
+      if (!studentEmail || !subject) {
+        return res.status(400).json({ error: "studentEmail and subject are required" });
+      }
+      await storage.createVivaResult({
+        studentName: studentName || "",
+        studentEmail,
+        studentPhone: studentPhone || "",
+        studentClass: studentClass || "",
+        studentDivision: studentDivision || "",
+        subject,
+        score: 0,
+        maxScore: 0,
+        transcript: [],
+        status: "terminated",
+        sheetSynced: "skip",
+      });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error recording terminated attempt:", error);
+      res.status(500).json({ error: "Failed to record attempt" });
+    }
+  });
+
   // Send OTP to student email
   app.post("/api/otp/send", async (req, res) => {
     try {
-      const { email } = req.body;
+      const { email, subject } = req.body;
       if (!email || !email.includes('@')) {
         return res.status(400).json({ error: "Valid email is required" });
+      }
+      // Check attempt limit before sending OTP
+      if (subject) {
+        const attempts = await storage.countVivaAttempts(email, subject);
+        if (attempts >= 2) {
+          return res.status(400).json({ error: "You have reached the maximum number of attempts (2) for this subject." });
+        }
       }
       const result = await sendOTP(email);
       if (result.success) {

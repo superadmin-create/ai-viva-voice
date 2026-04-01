@@ -97,6 +97,7 @@ export default function VivaPage() {
   const [otpValue, setOtpValue] = useState("");
   const [otpSending, setOtpSending] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
+  const [attemptLimitReached, setAttemptLimitReached] = useState(false);
 
   const [questions, setQuestions] = useState<string[]>(() => {
     try {
@@ -162,6 +163,7 @@ export default function VivaPage() {
   const isProcessingRef = useRef<boolean>(false);
   const questionsRef = useRef<string[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const studentInfoRef = useRef(studentInfo);
 
   useEffect(() => {
     currentAnswerRef.current = currentAnswer;
@@ -170,6 +172,10 @@ export default function VivaPage() {
   useEffect(() => {
     questionsRef.current = questions;
   }, [questions]);
+
+  useEffect(() => {
+    studentInfoRef.current = studentInfo;
+  }, [studentInfo]);
 
   const { data: subjectInfo } = useQuery<SubjectInfo>({
     queryKey: ["subject", subject],
@@ -370,6 +376,22 @@ export default function VivaPage() {
           mediaStreamRef.current.getTracks().forEach((t) => t.stop());
           mediaStreamRef.current = null;
         }
+        // Record terminated attempt for limit tracking (fire-and-forget)
+        const info = studentInfoRef.current;
+        if (info?.email) {
+          fetch("/api/viva/record-terminated", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              studentName: info.name,
+              studentEmail: info.email,
+              studentPhone: info.phone,
+              studentClass: info.studentClass,
+              studentDivision: info.division,
+              subject,
+            }),
+          }).catch(() => {});
+        }
         try {
           sessionStorage.removeItem(`${sessionKey}_step`);
           sessionStorage.removeItem(`${sessionKey}_student`);
@@ -502,14 +524,21 @@ export default function VivaPage() {
       return;
     }
     setOtpSending(true);
+    setAttemptLimitReached(false);
     try {
       const response = await fetch("/api/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: studentInfo.email }),
+        body: JSON.stringify({ email: studentInfo.email, subject }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to send OTP");
+      if (!response.ok) {
+        if (data.error?.includes("maximum")) {
+          setAttemptLimitReached(true);
+          return;
+        }
+        throw new Error(data.error || "Failed to send OTP");
+      }
       toast.success("OTP sent to your email!");
       setStep("otp");
     } catch (error: any) {
@@ -748,10 +777,24 @@ export default function VivaPage() {
                 </li>
               </ol>
             </div>
+            {attemptLimitReached && (
+              <div
+                className="rounded-lg border border-red-600/50 bg-red-600/10 px-4 py-3 text-center space-y-1"
+                data-testid="alert-attempt-limit"
+              >
+                <p className="text-red-400 font-bold text-sm">
+                  Maximum attempts reached
+                </p>
+                <p className="text-red-300 text-xs">
+                  You have already used both allowed attempts for this subject.
+                  No further attempts are permitted.
+                </p>
+              </div>
+            )}
             <Button
               onClick={sendOtpToEmail}
-              className="w-full h-12 text-base bg-violet-600 hover:bg-violet-500 text-white"
-              disabled={otpSending}
+              className="w-full h-12 text-base bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-50"
+              disabled={otpSending || attemptLimitReached}
               data-testid="button-start-exam"
             >
               {otpSending ? (

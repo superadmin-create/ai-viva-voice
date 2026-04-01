@@ -8,7 +8,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "../db";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, and, count } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -24,6 +24,7 @@ export interface IStorage {
   getVivaResultsBySubject(subject: string): Promise<VivaResult[]>;
   updateSheetSyncStatus(id: number, status: string): Promise<void>;
   updateVivaResult(id: number, data: Partial<{ transcript: any; score: number; status: string }>): Promise<void>;
+  countVivaAttempts(email: string, subject: string): Promise<number>;
 
   createSubject(subject: InsertSubject): Promise<Subject>;
   getSubjects(): Promise<Subject[]>;
@@ -96,6 +97,14 @@ export class DatabaseStorage implements IStorage {
 
   async updateVivaResult(id: number, data: Partial<{ transcript: any; score: number; status: string }>): Promise<void> {
     await db.update(vivaResults).set(data).where(eq(vivaResults.id, id));
+  }
+
+  async countVivaAttempts(email: string, subject: string): Promise<number> {
+    const result = await db
+      .select({ value: count() })
+      .from(vivaResults)
+      .where(and(eq(vivaResults.studentEmail, email), eq(vivaResults.subject, subject)));
+    return result[0]?.value ?? 0;
   }
 
   async createSubject(subject: InsertSubject): Promise<Subject> {
