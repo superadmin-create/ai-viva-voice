@@ -772,7 +772,7 @@ export default function VivaPage() {
                   answers will not get any marks)
                 </li>
                 <li>
-                  Once the microphone stops recording, your answer will appear.
+                  Tap on the "Stop" button to stop recording your answer then
                   Click "Next" to proceed to the next question.
                 </li>
               </ol>
