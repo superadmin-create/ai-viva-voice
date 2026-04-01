@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy, Upload, FileText, Filter, X, Download, Clock } from "lucide-react";
+import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, XCircle, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy, Upload, FileText, Filter, X, Download, Clock } from "lucide-react";
 import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -666,6 +666,11 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                                 <Badge variant="default" className="bg-yellow-500 text-black">
                                   <Clock className="h-3 w-3 mr-1 animate-spin" />
                                   In Progress
+                                </Badge>
+                              ) : result.status === "terminated" ? (
+                                <Badge variant="default" className="bg-red-600">
+                                  <XCircle className="h-3 w-3 mr-1" />
+                                  Terminated
                                 </Badge>
                               ) : (
                                 <Badge variant="default" className="bg-green-600">
