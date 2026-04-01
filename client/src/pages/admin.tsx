@@ -445,9 +445,11 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
 
   const stats = {
     total: results?.length || 0,
-    avgScore: results && results.length > 0
-      ? (results.reduce((acc, r) => acc + (r.score / r.maxScore) * 100, 0) / results.length).toFixed(1)
-      : "0.0",
+    avgScore: (() => {
+      const scoreable = results?.filter(r => r.maxScore > 0) ?? [];
+      if (scoreable.length === 0) return "0.0";
+      return (scoreable.reduce((acc, r) => acc + (r.score / r.maxScore) * 100, 0) / scoreable.length).toFixed(1);
+    })(),
     subjects: subjects?.length || 0,
   };
 
