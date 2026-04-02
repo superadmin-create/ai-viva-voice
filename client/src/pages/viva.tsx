@@ -627,6 +627,12 @@ export default function VivaPage() {
           data-testid="card-registration"
         >
           <CardHeader className="text-center pb-2 px-4 sm:px-6">
+            <img
+              src="/leapup-logo.png"
+              alt="LeapUp"
+              className="h-7 mx-auto mb-3 brightness-0 invert opacity-80"
+              data-testid="img-leapup-logo"
+            />
             <CardTitle
               className="text-2xl sm:text-3xl font-bold text-white"
               data-testid="heading-viva-title"
