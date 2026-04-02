@@ -1,95 +1,16 @@
-import { google } from "googleapis";
+import nodemailer from "nodemailer";
 import { randomInt } from "crypto";
 
-// Gmail integration via Replit connector (google-mail)
-let connectionSettings: any;
+const SMTP_FROM = "superadmin@leapup.in";
 
-async function getAccessToken() {
-  if (
-    connectionSettings &&
-    connectionSettings.settings.expires_at &&
-    new Date(connectionSettings.settings.expires_at).getTime() > Date.now()
-  ) {
-    return connectionSettings.settings.access_token;
-  }
-
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY
-    ? "repl " + process.env.REPL_IDENTITY
-    : process.env.WEB_REPL_RENEWAL
-    ? "depl " + process.env.WEB_REPL_RENEWAL
-    : null;
-
-  if (!xReplitToken) {
-    throw new Error("X-Replit-Token not found for repl/depl");
-  }
-
-  const rawData = await fetch(
-    "https://" +
-      hostname +
-      "/api/v2/connection?include_secrets=true&connector_names=google-mail",
-    {
-      headers: {
-        Accept: "application/json",
-        "X-Replit-Token": xReplitToken,
-      },
-    }
-  ).then((res) => res.json());
-
-  console.log("[Email] Connector API raw response keys:", Object.keys(rawData || {}));
-  console.log("[Email] Full response:", JSON.stringify(rawData).slice(0, 500));
-  console.log("[Email] Items count:", rawData?.items?.length);
-  if (rawData?.items?.[0]) {
-    const s = rawData.items[0].settings || {};
-    console.log("[Email] Settings keys:", Object.keys(s));
-    console.log("[Email] Has access_token:", !!s.access_token);
-    console.log("[Email] Has oauth path:", !!s.oauth?.credentials?.access_token);
-    console.log("[Email] expires_at:", s.expires_at);
-  }
-
-  connectionSettings = rawData?.items?.[0];
-
-  const accessToken =
-    connectionSettings?.settings?.access_token ||
-    connectionSettings?.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error("Gmail not connected");
-  }
-  return accessToken;
-}
-
-// WARNING: Never cache this client. Tokens expire.
-async function getUncachableGmailClient() {
-  const accessToken = await getAccessToken();
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({ access_token: accessToken });
-  return google.gmail({ version: "v1", auth: oauth2Client });
-}
-
-function buildRawEmail(to: string, subject: string, htmlBody: string): string {
-  const boundary = "boundary_ai_mock_viva";
-  const lines = [
-    `To: ${to}`,
-    `From: "AI Mock Viva" <me>`,
-    `Subject: ${subject}`,
-    `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    ``,
-    `--${boundary}`,
-    `Content-Type: text/html; charset=UTF-8`,
-    `Content-Transfer-Encoding: quoted-printable`,
-    ``,
-    htmlBody,
-    ``,
-    `--${boundary}--`,
-  ];
-  const raw = lines.join("\r\n");
-  return Buffer.from(raw)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+function createTransporter() {
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: SMTP_FROM,
+      pass: process.env.SMTP_PASSWORD,
+    },
+  });
 }
 
 const otpStore = new Map<
@@ -124,7 +45,7 @@ export async function sendOTP(
   sendCooldown.set(key, Date.now());
 
   try {
-    const gmail = await getUncachableGmailClient();
+    const transporter = createTransporter();
 
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
@@ -139,18 +60,14 @@ export async function sendOTP(
       </div>
     `;
 
-    const raw = buildRawEmail(
-      email,
-      "Your OTP for AI Mock Viva Examination",
-      htmlBody
-    );
-
-    await gmail.users.messages.send({
-      userId: "me",
-      requestBody: { raw },
+    await transporter.sendMail({
+      from: `"AI Mock Viva" <${SMTP_FROM}>`,
+      to: email,
+      subject: "Your OTP for AI Mock Viva Examination",
+      html: htmlBody,
     });
 
-    console.log(`[Email] OTP sent via Gmail API to ${email}`);
+    console.log(`[Email] OTP sent via SMTP to ${email}`);
     return { success: true };
   } catch (error: any) {
     console.error("[Email] Failed to send OTP:", error.message);
