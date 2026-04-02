@@ -49,7 +49,8 @@ Database tables:
 
 ### Email OTP Verification
 - Students must verify their email via OTP before starting an exam
-- OTP emails sent from `superadmin@leapup.in` via Gmail SMTP with App Password (`SMTP_PASSWORD` env var)
+- OTP emails sent from `superadmin@leapup.in` via Gmail SMTP (host: smtp.gmail.com, port: 465, SSL)
+- Uses Gmail App Password stored in `SMTP_PASSWORD` env var (spaces stripped automatically)
 - `server/lib/email-service.ts` handles OTP generation (crypto.randomInt), sending (nodemailer), and verification
 - 6-digit OTP, valid for 5 minutes, max 5 verification attempts, 30-second resend cooldown
 - In-memory OTP storage (Map) — resets on server restart

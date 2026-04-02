@@ -4,11 +4,14 @@ import { randomInt } from "crypto";
 const SMTP_FROM = "superadmin@leapup.in";
 
 function createTransporter() {
+  const pass = (process.env.SMTP_PASSWORD || "").replace(/\s+/g, "");
   return nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
     auth: {
       user: SMTP_FROM,
-      pass: process.env.SMTP_PASSWORD,
+      pass,
     },
   });
 }
