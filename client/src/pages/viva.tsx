@@ -119,6 +119,7 @@ export default function VivaPage() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
+  const [hasRecorded, setHasRecorded] = useState(false);
 
   const [isTranscribing, setIsTranscribing] = useState(false);
 
@@ -342,6 +343,7 @@ export default function VivaPage() {
         setCurrentAnswer("");
         setAnswerLocked(false);
         setMicAttempts(0);
+        setHasRecorded(false);
         isProcessingRef.current = false;
 
         await speakTextAsync(allQuestions[nextIndex]);
@@ -511,6 +513,7 @@ export default function VivaPage() {
 
       recorder.onstop = () => {
         setIsListening(false);
+        setHasRecorded(true);
         const blobType = recorder.mimeType || "audio/webm";
         const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
         sendAudioForTranscription(audioBlob);
@@ -1113,7 +1116,7 @@ export default function VivaPage() {
                 )}
                 <Button
                   onClick={manualSubmitAnswer}
-                  disabled={isListening || answerLocked || isTranscribing}
+                  disabled={isSpeaking || isListening || answerLocked || isTranscribing || !hasRecorded}
                   className="w-full h-11 sm:h-10 bg-violet-600 hover:bg-violet-500 text-white text-sm disabled:opacity-40"
                   data-testid="button-submit-answer"
                 >
