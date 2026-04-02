@@ -37,7 +37,7 @@ Key server components:
 ### Data Storage
 - **Database**: PostgreSQL via Drizzle ORM
 - **Schema Location**: `shared/schema.ts`
-- **Migrations**: Managed via `drizzle-kit push`
+- **Migrations**: `migrations/` folder contains SQL migration files; server startup auto-applies `ALTER TABLE IF NOT EXISTS` for new columns; `npm run db:push` for dev schema sync
 
 Database tables:
 - `users` - User accounts (id, username, password, role) with session-based auth

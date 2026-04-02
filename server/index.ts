@@ -4,6 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import { pool } from "../db";
 
 const app = express();
 const httpServer = createServer(app);
@@ -81,6 +82,17 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  try {
+    const client = await pool.connect();
+    await client.query(`
+      ALTER TABLE viva_results ADD COLUMN IF NOT EXISTS student_photo text;
+    `);
+    client.release();
+    console.log("Database schema up to date");
+  } catch (e) {
+    console.error("Schema update error (continuing):", e);
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
