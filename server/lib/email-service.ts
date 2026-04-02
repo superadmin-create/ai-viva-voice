@@ -24,7 +24,7 @@ async function getAccessToken() {
     throw new Error("X-Replit-Token not found for repl/depl");
   }
 
-  connectionSettings = await fetch(
+  const rawData = await fetch(
     "https://" +
       hostname +
       "/api/v2/connection?include_secrets=true&connector_names=google-mail",
@@ -34,9 +34,20 @@ async function getAccessToken() {
         "X-Replit-Token": xReplitToken,
       },
     }
-  )
-    .then((res) => res.json())
-    .then((data) => data.items?.[0]);
+  ).then((res) => res.json());
+
+  console.log("[Email] Connector API raw response keys:", Object.keys(rawData || {}));
+  console.log("[Email] Full response:", JSON.stringify(rawData).slice(0, 500));
+  console.log("[Email] Items count:", rawData?.items?.length);
+  if (rawData?.items?.[0]) {
+    const s = rawData.items[0].settings || {};
+    console.log("[Email] Settings keys:", Object.keys(s));
+    console.log("[Email] Has access_token:", !!s.access_token);
+    console.log("[Email] Has oauth path:", !!s.oauth?.credentials?.access_token);
+    console.log("[Email] expires_at:", s.expires_at);
+  }
+
+  connectionSettings = rawData?.items?.[0];
 
   const accessToken =
     connectionSettings?.settings?.access_token ||
