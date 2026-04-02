@@ -53,7 +53,7 @@ export default function LoginPage({ onLogin }: LoginProps) {
           <img
             src="/leapup-logo.png"
             alt="LeapUp"
-            className="h-10 mb-8 brightness-0 invert opacity-90"
+            className="h-10 mb-8"
             data-testid="img-leapup-logo"
           />
           <div className="w-14 h-14 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center mb-4">

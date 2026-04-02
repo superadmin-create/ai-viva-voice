@@ -630,7 +630,7 @@ export default function VivaPage() {
             <img
               src="/leapup-logo.png"
               alt="LeapUp"
-              className="h-7 mx-auto mb-3 brightness-0 invert opacity-80"
+              className="h-7 mx-auto mb-3"
               data-testid="img-leapup-logo"
             />
             <CardTitle
