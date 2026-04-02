@@ -38,6 +38,7 @@ export const vivaResults = pgTable("viva_results", {
   timestamp: timestamp("timestamp").notNull().defaultNow(),
   status: text("status").notNull().default("completed"),
   sheetSynced: text("sheet_synced").default("pending"),
+  studentPhoto: text("student_photo"),
 });
 
 export const insertVivaResultSchema = createInsertSchema(vivaResults).omit({

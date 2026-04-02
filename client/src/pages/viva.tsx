@@ -164,6 +164,10 @@ export default function VivaPage() {
   const questionsRef = useRef<string[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const studentInfoRef = useRef(studentInfo);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
+  const photoTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const capturedPhotoRef = useRef<string | null>(null);
 
   useEffect(() => {
     currentAnswerRef.current = currentAnswer;
@@ -229,9 +233,52 @@ export default function VivaPage() {
     setSilenceCountdown(null);
   }, []);
 
+  const stopCamera = useCallback(() => {
+    if (photoTimerRef.current) {
+      clearTimeout(photoTimerRef.current);
+      photoTimerRef.current = null;
+    }
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((t) => t.stop());
+      cameraStreamRef.current = null;
+    }
+    cameraVideoRef.current = null;
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: 320, height: 240 },
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      cameraVideoRef.current = video;
+      await video.play();
+      const delay = Math.floor(Math.random() * 60000) + 20000;
+      photoTimerRef.current = setTimeout(() => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = 320;
+          canvas.height = 240;
+          const ctx = canvas.getContext("2d");
+          if (ctx && video.readyState >= 2) {
+            ctx.drawImage(video, 0, 0, 320, 240);
+            capturedPhotoRef.current = canvas.toDataURL("image/jpeg", 0.6);
+          }
+        } catch {}
+      }, delay);
+    } catch {
+      // Camera unavailable or denied — silently skip
+    }
+  }, []);
+
   const submitExam = useCallback(async () => {
     try {
-      await submitFastMutation.mutateAsync({
+      const result = await submitFastMutation.mutateAsync({
         studentName: studentInfo.name,
         studentEmail: studentInfo.email,
         studentPhone: studentInfo.phone,
@@ -240,6 +287,16 @@ export default function VivaPage() {
         subject,
         rawAnswers: rawAnswersRef.current,
       });
+      stopCamera();
+      if (capturedPhotoRef.current && result?.id) {
+        try {
+          await fetch("/api/viva/upload-photo", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: result.id, photo: capturedPhotoRef.current }),
+          });
+        } catch {}
+      }
       try {
         sessionStorage.removeItem(`${sessionKey}_step`);
         sessionStorage.removeItem(`${sessionKey}_student`);
@@ -251,7 +308,7 @@ export default function VivaPage() {
       console.error("Submit error:", error);
       toast.error("Failed to submit. Please try again.");
     }
-  }, [studentInfo, subject, submitFastMutation]);
+  }, [studentInfo, subject, submitFastMutation, stopCamera]);
 
   const processAnswer = useCallback(
     async (answer: string, questionIndex: number) => {
@@ -351,12 +408,13 @@ export default function VivaPage() {
   useEffect(() => {
     return () => {
       clearSilenceTimer();
+      stopCamera();
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((t) => t.stop());
         mediaStreamRef.current = null;
       }
     };
-  }, [clearSilenceTimer]);
+  }, [clearSilenceTimer, stopCamera]);
 
   useEffect(() => {
     if (step !== "exam") return;
@@ -594,6 +652,7 @@ export default function VivaPage() {
       );
       setQuestions(questionTexts);
       setStep("exam");
+      startCamera();
 
       if (questionTexts.length > 0) {
         try {

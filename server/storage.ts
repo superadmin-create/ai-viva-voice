@@ -24,6 +24,7 @@ export interface IStorage {
   getVivaResultsBySubject(subject: string): Promise<VivaResult[]>;
   updateSheetSyncStatus(id: number, status: string): Promise<void>;
   updateVivaResult(id: number, data: Partial<{ transcript: any; score: number; status: string }>): Promise<void>;
+  updateVivaPhoto(id: number, photo: string): Promise<void>;
   countVivaAttempts(email: string, subject: string): Promise<number>;
 
   createSubject(subject: InsertSubject): Promise<Subject>;
@@ -97,6 +98,10 @@ export class DatabaseStorage implements IStorage {
 
   async updateVivaResult(id: number, data: Partial<{ transcript: any; score: number; status: string }>): Promise<void> {
     await db.update(vivaResults).set(data).where(eq(vivaResults.id, id));
+  }
+
+  async updateVivaPhoto(id: number, photo: string): Promise<void> {
+    await db.update(vivaResults).set({ studentPhoto: photo }).where(eq(vivaResults.id, id));
   }
 
   async countVivaAttempts(email: string, subject: string): Promise<number> {

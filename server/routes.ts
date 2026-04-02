@@ -767,6 +767,22 @@ export async function registerRoutes(
     }
   });
 
+  // Upload student photo for a viva result
+  app.post("/api/viva/upload-photo", async (req, res) => {
+    try {
+      const { id, photo } = req.body;
+      if (!id || !photo) return res.status(400).json({ error: "Missing id or photo" });
+      if (!photo.startsWith("data:image/")) return res.status(400).json({ error: "Invalid photo format" });
+      // Limit to ~500KB base64
+      if (photo.length > 700000) return res.status(400).json({ error: "Photo too large" });
+      await storage.updateVivaPhoto(Number(id), photo);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Photo upload error:", error);
+      res.status(500).json({ error: "Failed to save photo" });
+    }
+  });
+
   // Submit viva results - immediately syncs to Google Sheets
   app.post("/api/viva/submit", async (req, res) => {
     try {

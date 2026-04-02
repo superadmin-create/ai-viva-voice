@@ -32,6 +32,7 @@ type VivaResult = {
   timestamp: string;
   status: string;
   sheetSynced: string | null;
+  studentPhoto: string | null;
 };
 
 type Subject = {
@@ -413,7 +414,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       }
       return val;
     };
-    const headers = ["Name", "Email", "Phone", "Class", "Division", "Subject", "Score", "Max Score", "Score %", "Date", "Questions & Answers"];
+    const headers = ["Name", "Email", "Phone", "Class", "Division", "Subject", "Score", "Max Score", "Score %", "Date", "Has Photo", "Questions & Answers"];
     const rows = filteredResults.map(r => {
       const transcript = r.transcript.map((t, i) =>
         `Q${i + 1}: ${t.question} | A: ${t.answer} | Score: ${t.score} | Feedback: ${t.feedback}`
@@ -429,6 +430,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
         String(r.maxScore),
         ((r.score / r.maxScore) * 100).toFixed(1),
         new Date(r.timestamp).toLocaleDateString(),
+        r.studentPhoto ? 'Yes' : 'No',
         escCsv(transcript),
       ].join(',');
     });
@@ -628,6 +630,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                           <TableHead>Score</TableHead>
                           <TableHead>Date</TableHead>
                           <TableHead>Status</TableHead>
+                          <TableHead>Photo</TableHead>
                           <TableHead>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -679,6 +682,18 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                                   <CheckCircle2 className="h-3 w-3 mr-1" />
                                   Completed
                                 </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {result.studentPhoto ? (
+                                <img
+                                  src={result.studentPhoto}
+                                  alt="Student"
+                                  className="w-10 h-10 rounded object-cover border border-gray-200"
+                                  data-testid={`img-student-photo-${result.id}`}
+                                />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
                               )}
                             </TableCell>
                             <TableCell>
@@ -1047,6 +1062,18 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                   <p className="font-medium">{new Date(selectedResult.timestamp).toLocaleString()}</p>
                 </div>
               </div>
+
+              {selectedResult.studentPhoto && (
+                <div className="mb-4">
+                  <h3 className="font-semibold mb-2">Student Photo</h3>
+                  <img
+                    src={selectedResult.studentPhoto}
+                    alt="Student during exam"
+                    className="rounded-lg border border-gray-200 max-w-xs"
+                    data-testid="img-detail-student-photo"
+                  />
+                </div>
+              )}
 
               <div>
                 <h3 className="font-semibold mb-4">Transcript</h3>
