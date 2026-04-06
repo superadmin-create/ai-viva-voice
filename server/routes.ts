@@ -601,6 +601,21 @@ export async function registerRoutes(
     }
   });
 
+  // Check attempt limit for a student/subject combo
+  app.get("/api/viva/check-attempts", async (req, res) => {
+    try {
+      const { email, subject } = req.query as { email?: string; subject?: string };
+      if (!email || !subject) {
+        return res.json({ limitReached: false, count: 0 });
+      }
+      const count = await storage.countVivaAttempts(email, subject);
+      res.json({ limitReached: count >= 2, count });
+    } catch (error) {
+      console.error("Error checking attempts:", error);
+      res.json({ limitReached: false, count: 0 });
+    }
+  });
+
   // Generate viva questions for a subject
   app.post("/api/viva/generate-questions", async (req, res) => {
     try {

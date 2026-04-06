@@ -21,12 +21,10 @@ import {
   User,
   Mail,
   Phone,
-  ArrowLeft,
   RefreshCw,
   Clock,
   GraduationCap,
   Users,
-  ShieldCheck,
 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -51,7 +49,7 @@ export default function VivaPage() {
   const sessionKey = `viva_${subject}`;
 
   const [step, setStepRaw] = useState<
-    "register" | "otp" | "preparing" | "exam" | "completed" | "expired"
+    "register" | "preparing" | "exam" | "completed" | "expired"
   >(() => {
     try {
       const saved = sessionStorage.getItem(`${sessionKey}_step`);
@@ -63,7 +61,6 @@ export default function VivaPage() {
     (
       newStep:
         | "register"
-        | "otp"
         | "preparing"
         | "exam"
         | "completed"
@@ -94,9 +91,7 @@ export default function VivaPage() {
     [sessionKey],
   );
 
-  const [otpValue, setOtpValue] = useState("");
-  const [otpSending, setOtpSending] = useState(false);
-  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [attemptLimitReached, setAttemptLimitReached] = useState(false);
 
   const [questions, setQuestions] = useState<string[]>(() => {
@@ -573,7 +568,7 @@ export default function VivaPage() {
     });
   }, []);
 
-  const sendOtpToEmail = async () => {
+  const startExam = async () => {
     if (
       !studentInfo.name ||
       !studentInfo.email ||
@@ -584,68 +579,18 @@ export default function VivaPage() {
       toast.error("Please fill in all fields");
       return;
     }
-    setOtpSending(true);
+    setIsStarting(true);
     setAttemptLimitReached(false);
     try {
-      const response = await fetch("/api/otp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: studentInfo.email, subject }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        if (data.error?.includes("maximum")) {
-          setAttemptLimitReached(true);
-          return;
-        }
-        throw new Error(data.error || "Failed to send OTP");
+      const checkRes = await fetch(
+        `/api/viva/check-attempts?email=${encodeURIComponent(studentInfo.email)}&subject=${encodeURIComponent(subject)}`
+      );
+      const checkData = await checkRes.json();
+      if (checkData.limitReached) {
+        setAttemptLimitReached(true);
+        return;
       }
-      toast.success("OTP sent to your email!");
-      setStep("otp");
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setOtpSending(false);
-    }
-  };
 
-  const resendOtp = async () => {
-    setOtpSending(true);
-    try {
-      const response = await fetch("/api/otp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: studentInfo.email, subject }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to send OTP");
-      toast.success("New OTP sent!");
-      setOtpValue("");
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setOtpSending(false);
-    }
-  };
-
-  const verifyOtpAndStart = async () => {
-    if (!otpValue.trim()) {
-      toast.error("Please enter the OTP");
-      return;
-    }
-    setOtpVerifying(true);
-    try {
-      const response = await fetch("/api/otp/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: studentInfo.email,
-          otp: otpValue.trim(),
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Invalid OTP");
-      toast.success("Email verified!");
       rawAnswersRef.current = [];
       setStep("preparing");
 
@@ -666,12 +611,12 @@ export default function VivaPage() {
         } catch {}
       }
     } catch (error: any) {
-      if (step === "preparing" || step === "register" || step === "otp") {
+      if (step === "preparing" || step === "register") {
         setStep("register");
       }
       toast.error(error.message || "Something went wrong. Please try again.");
     } finally {
-      setOtpVerifying(false);
+      setIsStarting(false);
     }
   };
 
@@ -860,108 +805,19 @@ export default function VivaPage() {
               </div>
             )}
             <Button
-              onClick={sendOtpToEmail}
+              onClick={startExam}
               className="w-full h-12 text-base bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-50"
-              disabled={otpSending || attemptLimitReached}
+              disabled={isStarting || attemptLimitReached}
               data-testid="button-start-exam"
             >
-              {otpSending ? (
+              {isStarting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending
-                  OTP...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Starting...
                 </>
               ) : (
-                "Verify Email & Start"
+                "Start Viva"
               )}
             </Button>
-          </CardContent>
-        </Card>
-        <audio ref={audioRef} hidden />
-      </div>
-    );
-  }
-
-  if (step === "otp") {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4 py-6 sm:p-6">
-        <Card className="w-full max-w-md bg-zinc-800/50 border-zinc-700 backdrop-blur">
-          <CardHeader className="text-center px-4 sm:px-6">
-            <div className="mx-auto w-12 h-12 rounded-full bg-violet-600/20 flex items-center justify-center mb-2">
-              <ShieldCheck className="h-6 w-6 text-violet-400" />
-            </div>
-            <CardTitle
-              className="text-xl text-white"
-              data-testid="text-otp-title"
-            >
-              Verify Your Email
-            </CardTitle>
-            <p className="text-sm text-zinc-400">
-              We've sent a 6-digit OTP to{" "}
-              <span className="text-violet-400 font-medium break-all">
-                {studentInfo.email}
-              </span>
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4 px-4 sm:px-6">
-            <div>
-              <Label className="text-zinc-300 text-sm">Enter OTP</Label>
-              <Input
-                value={otpValue}
-                onChange={(e) =>
-                  setOtpValue(e.target.value.replace(/\D/g, "").slice(0, 6))
-                }
-                placeholder="Enter 6-digit OTP"
-                className="bg-zinc-700/50 border-zinc-600 text-white text-center text-lg tracking-[0.5em] placeholder:tracking-normal placeholder:text-sm h-12"
-                maxLength={6}
-                inputMode="numeric"
-                data-testid="input-otp"
-              />
-            </div>
-            <Button
-              onClick={verifyOtpAndStart}
-              className="w-full h-12 text-base bg-violet-600 hover:bg-violet-500 text-white"
-              disabled={otpVerifying || otpValue.length < 6}
-              data-testid="button-verify-otp"
-            >
-              {otpVerifying ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...
-                </>
-              ) : (
-                "Verify & Start Exam"
-              )}
-            </Button>
-            <div className="flex items-center justify-between">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setStep("register");
-                  setOtpValue("");
-                }}
-                className="text-zinc-400 hover:text-white h-10 px-3"
-                data-testid="button-back-to-register"
-              >
-                <ArrowLeft className="h-4 w-4 mr-1" /> Back
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={resendOtp}
-                disabled={otpSending}
-                className="text-violet-400 hover:text-violet-300 h-10 px-3"
-                data-testid="button-resend-otp"
-              >
-                {otpSending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : null}
-                Resend OTP
-              </Button>
-            </div>
-            <p className="text-xs text-zinc-500 text-center">
-              OTP is valid for 5 minutes. Check your spam folder if you don't
-              see it.
-            </p>
           </CardContent>
         </Card>
         <audio ref={audioRef} hidden />
