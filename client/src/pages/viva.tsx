@@ -788,7 +788,7 @@ export default function VivaPage() {
                 Instructions:
               </p>
               <ol className="text-xs sm:text-sm text-zinc-300 space-y-1.5 list-decimal list-outside pl-4">
-                <li>Please allow microphone access to enable voice input.</li>
+                <li>It is compulsory to allow access to camera and microphone, if denied any access, the viva marks will not be considered.</li>
                 <li>
                   Do not switch tabs or navigate away — the viva will end
                   automatically if you leave this page.
