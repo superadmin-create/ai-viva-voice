@@ -532,7 +532,7 @@ export async function registerRoutes(
   // Record a terminated viva attempt (tab-switch / navigation away)
   app.post("/api/viva/record-terminated", async (req, res) => {
     try {
-      const { studentName, studentEmail, studentPhone, studentClass, studentDivision, subject } = req.body;
+      const { studentName, studentEmail, studentPhone, studentClass, studentDivision, studentRollNumber, subject } = req.body;
       if (!studentEmail || !subject) {
         return res.status(400).json({ error: "studentEmail and subject are required" });
       }
@@ -542,6 +542,7 @@ export async function registerRoutes(
         studentPhone: studentPhone || "",
         studentClass: studentClass || "",
         studentDivision: studentDivision || "",
+        studentRollNumber: studentRollNumber || "",
         subject,
         score: 0,
         maxScore: 0,
@@ -709,7 +710,7 @@ export async function registerRoutes(
   // Submit viva results with raw answers - evaluates in background
   app.post("/api/viva/submit-fast", async (req, res) => {
     try {
-      const { studentName, studentEmail, studentPhone, studentClass, studentDivision, subject, rawAnswers } = req.body;
+      const { studentName, studentEmail, studentPhone, studentClass, studentDivision, studentRollNumber, subject, rawAnswers } = req.body;
       
       if (!studentName || !studentEmail || !studentPhone || !subject || !rawAnswers) {
         return res.status(400).json({ error: "Missing required fields" });
@@ -728,6 +729,7 @@ export async function registerRoutes(
         studentPhone,
         studentClass: studentClass || "",
         studentDivision: studentDivision || "",
+        studentRollNumber: studentRollNumber || "",
         subject,
         score: 0,
         maxScore: rawAnswers.length * 10,

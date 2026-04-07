@@ -20,6 +20,7 @@ type VivaResult = {
   studentPhone: string;
   studentClass: string;
   studentDivision: string;
+  studentRollNumber: string;
   subject: string;
   score: number;
   maxScore: number;
@@ -414,13 +415,14 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       }
       return val;
     };
-    const headers = ["Name", "Email", "Phone", "Class", "Division", "Subject", "Score", "Max Score", "Score %", "Date", "Has Photo", "Questions & Answers"];
+    const headers = ["Name", "Roll No.", "Email", "Phone", "Class", "Division", "Subject", "Score", "Max Score", "Score %", "Date", "Has Photo", "Questions & Answers"];
     const rows = filteredResults.map(r => {
       const transcript = r.transcript.map((t, i) =>
         `Q${i + 1}: ${t.question} | A: ${t.answer} | Score: ${t.score} | Feedback: ${t.feedback}`
       ).join(' || ');
       return [
         escCsv(r.studentName),
+        escCsv(r.studentRollNumber || ''),
         escCsv(r.studentEmail),
         escCsv(r.studentPhone),
         escCsv(r.studentClass || ''),
@@ -646,6 +648,11 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                               <div>
                                 <div className="font-medium">{result.studentName}</div>
                                 <div className="text-sm text-muted-foreground">{result.studentEmail}</div>
+                                {result.studentRollNumber && (
+                                  <div className="text-xs text-muted-foreground mt-0.5">
+                                    Roll No: {result.studentRollNumber}
+                                  </div>
+                                )}
                                 {(result.studentClass || result.studentDivision) && (
                                   <div className="text-xs text-muted-foreground mt-0.5">
                                     {result.studentClass}{result.studentClass && result.studentDivision ? ' · ' : ''}{result.studentDivision}
@@ -1038,6 +1045,10 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                 <div>
                   <p className="text-sm text-muted-foreground">Phone</p>
                   <p className="font-medium">{selectedResult.studentPhone}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Roll No.</p>
+                  <p className="font-medium">{selectedResult.studentRollNumber || "—"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Class</p>

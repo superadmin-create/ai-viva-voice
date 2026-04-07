@@ -79,7 +79,7 @@ export default function VivaPage() {
       const saved = sessionStorage.getItem(`${sessionKey}_student`);
       if (saved) return JSON.parse(saved);
     } catch {}
-    return { name: "", email: "", phone: "", studentClass: "", division: "" };
+    return { name: "", email: "", phone: "", rollNumber: "", studentClass: "", division: "" };
   });
   const updateStudentInfo = useCallback(
     (info: typeof studentInfo) => {
@@ -278,6 +278,7 @@ export default function VivaPage() {
         studentName: studentInfo.name,
         studentEmail: studentInfo.email,
         studentPhone: studentInfo.phone,
+        studentRollNumber: studentInfo.rollNumber,
         studentClass: studentInfo.studentClass,
         studentDivision: studentInfo.division,
         subject,
@@ -441,6 +442,7 @@ export default function VivaPage() {
               studentName: info.name,
               studentEmail: info.email,
               studentPhone: info.phone,
+              studentRollNumber: info.rollNumber,
               studentClass: info.studentClass,
               studentDivision: info.division,
               subject,
@@ -573,6 +575,7 @@ export default function VivaPage() {
       !studentInfo.name ||
       !studentInfo.email ||
       !studentInfo.phone ||
+      !studentInfo.rollNumber ||
       !studentInfo.studentClass ||
       !studentInfo.division
     ) {
@@ -712,6 +715,24 @@ export default function VivaPage() {
                   }
                   className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
                   data-testid="input-phone"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label
+                  htmlFor="rollNumber"
+                  className="text-zinc-300 flex items-center gap-2 text-sm"
+                >
+                  <GraduationCap className="h-3.5 w-3.5" /> Roll Number
+                </Label>
+                <Input
+                  id="rollNumber"
+                  placeholder="Enter your roll number"
+                  value={studentInfo.rollNumber}
+                  onChange={(e) =>
+                    updateStudentInfo({ ...studentInfo, rollNumber: e.target.value })
+                  }
+                  className="bg-zinc-700/50 border-zinc-600 text-white placeholder:text-zinc-500 h-11 text-base"
+                  data-testid="input-roll-number"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
