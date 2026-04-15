@@ -817,11 +817,10 @@ export default function VivaPage() {
                 data-testid="alert-attempt-limit"
               >
                 <p className="text-red-400 font-bold text-sm">
-                  Maximum attempts reached
+                  Attempt limit reached
                 </p>
                 <p className="text-red-300 text-xs">
-                  You have already used both allowed attempts for this subject.
-                  No further attempts are permitted.
+                  You have already attempted this subject's viva. No further attempts are allowed. Please contact your teacher if you need to retake it.
                 </p>
               </div>
             )}
