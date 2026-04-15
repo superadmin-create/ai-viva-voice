@@ -820,7 +820,7 @@ export default function VivaPage() {
                   Attempt limit reached
                 </p>
                 <p className="text-red-300 text-xs">
-                  You have already attempted this subject's viva. No further attempts are allowed. Please contact your teacher if you need to retake it.
+                  You have already attempted this subject's viva. No further attempts are allowed.
                 </p>
               </div>
             )}
