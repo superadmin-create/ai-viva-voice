@@ -707,6 +707,10 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                                 <Badge variant="default" className="bg-orange-500">
                                   Attempt Reset
                                 </Badge>
+                              ) : result.status === "started" ? (
+                                <Badge variant="default" className="bg-blue-500">
+                                  In Progress
+                                </Badge>
                               ) : (
                                 <Badge variant="default" className="bg-green-600">
                                   <CheckCircle2 className="h-3 w-3 mr-1" />

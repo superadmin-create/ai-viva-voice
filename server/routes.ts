@@ -529,14 +529,14 @@ export async function registerRoutes(
     }
   });
 
-  // Record a terminated viva attempt (tab-switch / navigation away)
-  app.post("/api/viva/record-terminated", async (req, res) => {
+  // Mark attempt as started — creates a DB record immediately to lock the attempt slot
+  app.post("/api/viva/start-attempt", async (req, res) => {
     try {
       const { studentName, studentEmail, studentPhone, studentClass, studentDivision, studentRollNumber, subject } = req.body;
       if (!studentEmail || !subject) {
         return res.status(400).json({ error: "studentEmail and subject are required" });
       }
-      await storage.createVivaResult({
+      const result = await storage.createVivaResult({
         studentName: studentName || "",
         studentEmail,
         studentPhone: studentPhone || "",
@@ -547,9 +547,41 @@ export async function registerRoutes(
         score: 0,
         maxScore: 0,
         transcript: [],
-        status: "terminated",
+        status: "started",
         sheetSynced: "skip",
       });
+      res.json({ success: true, id: result.id });
+    } catch (error: any) {
+      console.error("Error starting attempt:", error);
+      res.status(500).json({ error: "Failed to start attempt" });
+    }
+  });
+
+  // Record a terminated viva attempt (tab-switch / navigation away)
+  app.post("/api/viva/record-terminated", async (req, res) => {
+    try {
+      const { studentName, studentEmail, studentPhone, studentClass, studentDivision, studentRollNumber, subject, resultId } = req.body;
+      if (!studentEmail || !subject) {
+        return res.status(400).json({ error: "studentEmail and subject are required" });
+      }
+      if (resultId) {
+        await storage.updateVivaResult(resultId, { status: "terminated" });
+      } else {
+        await storage.createVivaResult({
+          studentName: studentName || "",
+          studentEmail,
+          studentPhone: studentPhone || "",
+          studentClass: studentClass || "",
+          studentDivision: studentDivision || "",
+          studentRollNumber: studentRollNumber || "",
+          subject,
+          score: 0,
+          maxScore: 0,
+          transcript: [],
+          status: "terminated",
+          sheetSynced: "skip",
+        });
+      }
       res.json({ success: true });
     } catch (error: any) {
       console.error("Error recording terminated attempt:", error);
@@ -725,7 +757,7 @@ export async function registerRoutes(
   // Submit viva results with raw answers - evaluates in background
   app.post("/api/viva/submit-fast", async (req, res) => {
     try {
-      const { studentName, studentEmail, studentPhone, studentClass, studentDivision, studentRollNumber, subject, rawAnswers } = req.body;
+      const { studentName, studentEmail, studentPhone, studentClass, studentDivision, studentRollNumber, subject, rawAnswers, resultId } = req.body;
       
       if (!studentName || !studentEmail || !studentPhone || !subject || !rawAnswers) {
         return res.status(400).json({ error: "Missing required fields" });
@@ -738,20 +770,32 @@ export async function registerRoutes(
         score: 0,
       }));
 
-      const result = await storage.createVivaResult({
-        studentName,
-        studentEmail,
-        studentPhone,
-        studentClass: studentClass || "",
-        studentDivision: studentDivision || "",
-        studentRollNumber: studentRollNumber || "",
-        subject,
-        score: 0,
-        maxScore: rawAnswers.length * 10,
-        transcript: placeholderTranscript,
-        status: "evaluating",
-        sheetSynced: "pending",
-      });
+      let resultRecord: { id: number };
+      if (resultId) {
+        await storage.updateVivaResult(resultId, {
+          transcript: placeholderTranscript,
+          maxScore: rawAnswers.length * 10,
+          status: "evaluating",
+          sheetSynced: "pending",
+        });
+        resultRecord = { id: resultId };
+      } else {
+        resultRecord = await storage.createVivaResult({
+          studentName,
+          studentEmail,
+          studentPhone,
+          studentClass: studentClass || "",
+          studentDivision: studentDivision || "",
+          studentRollNumber: studentRollNumber || "",
+          subject,
+          score: 0,
+          maxScore: rawAnswers.length * 10,
+          transcript: placeholderTranscript,
+          status: "evaluating",
+          sheetSynced: "pending",
+        });
+      }
+      const result = resultRecord;
 
       // Return immediately
       res.json({ success: true, id: result.id });

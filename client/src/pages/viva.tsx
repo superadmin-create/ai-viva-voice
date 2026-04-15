@@ -149,6 +149,7 @@ export default function VivaPage() {
   }, []);
 
   const rawAnswersRef = useRef<RawAnswer[]>([]);
+  const vivaResultIdRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -204,8 +205,12 @@ export default function VivaPage() {
       studentName: string;
       studentEmail: string;
       studentPhone: string;
+      studentRollNumber?: string;
+      studentClass?: string;
+      studentDivision?: string;
       subject: string;
       rawAnswers: RawAnswer[];
+      resultId?: number | null;
     }) => {
       const response = await fetch("/api/viva/submit-fast", {
         method: "POST",
@@ -283,6 +288,7 @@ export default function VivaPage() {
         studentDivision: studentInfo.division,
         subject,
         rawAnswers: rawAnswersRef.current,
+        resultId: vivaResultIdRef.current,
       });
       stopCamera();
       if (capturedPhotoRef.current && result?.id) {
@@ -446,6 +452,7 @@ export default function VivaPage() {
               studentClass: info.studentClass,
               studentDivision: info.division,
               subject,
+              resultId: vivaResultIdRef.current,
             }),
           }).catch(() => {});
         }
@@ -593,6 +600,24 @@ export default function VivaPage() {
         setAttemptLimitReached(true);
         return;
       }
+
+      // Lock the attempt slot immediately so no parallel tab / refresh can bypass the limit
+      const startRes = await fetch("/api/viva/start-attempt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentName: studentInfo.name,
+          studentEmail: studentInfo.email,
+          studentPhone: studentInfo.phone,
+          studentRollNumber: studentInfo.rollNumber,
+          studentClass: studentInfo.studentClass,
+          studentDivision: studentInfo.division,
+          subject,
+        }),
+      });
+      const startData = await startRes.json();
+      if (!startRes.ok) throw new Error(startData.error || "Failed to start attempt");
+      vivaResultIdRef.current = startData.id;
 
       rawAnswersRef.current = [];
       setStep("preparing");
