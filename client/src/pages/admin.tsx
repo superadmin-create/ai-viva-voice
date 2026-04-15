@@ -343,6 +343,25 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     },
   });
 
+  const resetAttemptMutation = useMutation({
+    mutationFn: async ({ email, subject }: { email: string; subject: string }) => {
+      const response = await fetch("/api/admin/reset-attempts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, subject }),
+      });
+      if (!response.ok) throw new Error("Failed to reset attempt");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast.success("Attempt reset! Student can now retake the exam.");
+      queryClient.invalidateQueries({ queryKey: ["results"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
   const handleCreateSubject = () => {
     const lines = newSubject.curriculum.trim()
       ? newSubject.curriculum.split('\n').map(l => l.trim()).filter(l => l.length > 0)
@@ -683,6 +702,10 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                                 <Badge variant="default" className="bg-red-600">
                                   <XCircle className="h-3 w-3 mr-1" />
                                   Terminated
+                                </Badge>
+                              ) : result.status === "reset_by_admin" ? (
+                                <Badge variant="default" className="bg-orange-500">
+                                  Attempt Reset
                                 </Badge>
                               ) : (
                                 <Badge variant="default" className="bg-green-600">
@@ -1072,6 +1095,24 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                   <p className="text-sm text-muted-foreground">Date</p>
                   <p className="font-medium">{new Date(selectedResult.timestamp).toLocaleString()}</p>
                 </div>
+              </div>
+
+              <div className="mb-4 flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-orange-400 text-orange-600 hover:bg-orange-50"
+                  disabled={resetAttemptMutation.isPending}
+                  onClick={() => {
+                    if (confirm(`Reset attempt for ${selectedResult.studentName} (${selectedResult.studentEmail}) on subject "${selectedResult.subject}"? They will be able to retake the exam.`)) {
+                      resetAttemptMutation.mutate({ email: selectedResult.studentEmail, subject: selectedResult.subject });
+                    }
+                  }}
+                  data-testid="button-reset-attempt"
+                >
+                  {resetAttemptMutation.isPending ? "Resetting..." : "Reset Attempt"}
+                </Button>
+                <p className="text-xs text-muted-foreground">Allows this student to retake the exam for this subject.</p>
               </div>
 
               {selectedResult.studentPhoto && (

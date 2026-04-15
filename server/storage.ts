@@ -8,7 +8,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "../db";
-import { eq, desc, inArray, and, count } from "drizzle-orm";
+import { eq, desc, inArray, and, count, ne } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -26,6 +26,7 @@ export interface IStorage {
   updateVivaResult(id: number, data: Partial<{ transcript: any; score: number; status: string }>): Promise<void>;
   updateVivaPhoto(id: number, photo: string): Promise<void>;
   countVivaAttempts(email: string, subject: string): Promise<number>;
+  resetVivaAttempts(email: string, subject: string): Promise<void>;
 
   createSubject(subject: InsertSubject): Promise<Subject>;
   getSubjects(): Promise<Subject[]>;
@@ -108,8 +109,19 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .select({ value: count() })
       .from(vivaResults)
-      .where(and(eq(vivaResults.studentEmail, email), eq(vivaResults.subject, subject)));
+      .where(and(
+        eq(vivaResults.studentEmail, email),
+        eq(vivaResults.subject, subject),
+        ne(vivaResults.status, "reset_by_admin"),
+      ));
     return result[0]?.value ?? 0;
+  }
+
+  async resetVivaAttempts(email: string, subject: string): Promise<void> {
+    await db
+      .update(vivaResults)
+      .set({ status: "reset_by_admin" })
+      .where(and(eq(vivaResults.studentEmail, email), eq(vivaResults.subject, subject)));
   }
 
   async createSubject(subject: InsertSubject): Promise<Subject> {

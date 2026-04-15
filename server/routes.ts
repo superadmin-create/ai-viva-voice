@@ -567,8 +567,8 @@ export async function registerRoutes(
       // Check attempt limit before sending OTP
       if (subject) {
         const attempts = await storage.countVivaAttempts(email, subject);
-        if (attempts >= 2) {
-          return res.status(400).json({ error: "You have reached the maximum number of attempts (2) for this subject." });
+        if (attempts >= 1) {
+          return res.status(400).json({ error: "You have reached the maximum number of attempts (1) for this subject." });
         }
       }
       const result = await sendOTP(email);
@@ -602,6 +602,21 @@ export async function registerRoutes(
     }
   });
 
+  // Reset attempt for a student/subject (admin/user only)
+  app.post("/api/admin/reset-attempts", requireAuth, async (req, res) => {
+    try {
+      const { email, subject } = req.body;
+      if (!email || !subject) {
+        return res.status(400).json({ error: "email and subject are required" });
+      }
+      await storage.resetVivaAttempts(email, subject);
+      res.json({ success: true, message: "Attempt reset successfully" });
+    } catch (error: any) {
+      console.error("Error resetting attempts:", error);
+      res.status(500).json({ error: "Failed to reset attempt" });
+    }
+  });
+
   // Check attempt limit for a student/subject combo
   app.get("/api/viva/check-attempts", async (req, res) => {
     try {
@@ -610,7 +625,7 @@ export async function registerRoutes(
         return res.json({ limitReached: false, count: 0 });
       }
       const count = await storage.countVivaAttempts(email, subject);
-      res.json({ limitReached: count >= 2, count });
+      res.json({ limitReached: count >= 1, count });
     } catch (error) {
       console.error("Error checking attempts:", error);
       res.json({ limitReached: false, count: 0 });
