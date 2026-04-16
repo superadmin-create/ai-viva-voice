@@ -82,6 +82,9 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [filterUser, setFilterUser] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [filterStatus, setFilterStatus] = useState("");
+  const [sortField, setSortField] = useState("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const { data: results, isLoading } = useQuery<VivaResult[]>({
     queryKey: ["admin-results"],
@@ -453,31 +456,60 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const uniqueClasses = [...new Set((results || []).map(r => r.studentClass).filter(Boolean))].sort();
   const uniqueDivisions = [...new Set((results || []).map(r => r.studentDivision).filter(Boolean))].sort();
   const uniqueSubjectSlugs = [...new Set((results || []).map(r => r.subject))].sort();
-  const hasActiveFilters = filterClass || filterDivision || filterSubject || filterDate || filterUser || searchQuery;
+  const hasActiveFilters = filterClass || filterDivision || filterSubject || filterDate || filterUser || searchQuery || filterStatus;
 
-  const filteredResults = (results || []).filter(r => {
-    if (filterClass && r.studentClass !== filterClass) return false;
-    if (filterDivision && r.studentDivision !== filterDivision) return false;
-    if (filterSubject && r.subject !== filterSubject) return false;
-    if (filterUser) {
-      const ownerId = subjectOwnerMap.get(r.subject);
-      if (ownerId !== filterUser) return false;
+  const statusLabel = (s: string) => {
+    switch (s) {
+      case "completed": return "Completed";
+      case "terminated": return "Terminated";
+      case "started": return "In Progress";
+      case "evaluating": return "Evaluating";
+      case "reset_by_admin": return "Attempt Reset";
+      default: return s;
     }
-    if (filterDate) {
-      const resultDate = new Date(r.timestamp).toISOString().split('T')[0];
-      if (resultDate !== filterDate) return false;
-    }
-    if (searchQuery) {
-      const q = searchQuery.trim().toLowerCase();
-      const matches =
-        (r.studentName || "").toLowerCase().includes(q) ||
-        (r.studentEmail || "").toLowerCase().includes(q) ||
-        (r.studentPhone || "").toLowerCase().includes(q) ||
-        (r.studentRollNumber || "").toLowerCase().includes(q);
-      if (!matches) return false;
-    }
-    return true;
-  });
+  };
+
+  const filteredResults = (results || [])
+    .filter(r => {
+      if (filterClass && r.studentClass !== filterClass) return false;
+      if (filterDivision && r.studentDivision !== filterDivision) return false;
+      if (filterSubject && r.subject !== filterSubject) return false;
+      if (filterUser) {
+        const ownerId = subjectOwnerMap.get(r.subject);
+        if (ownerId !== filterUser) return false;
+      }
+      if (filterDate) {
+        const resultDate = new Date(r.timestamp).toISOString().split('T')[0];
+        if (resultDate !== filterDate) return false;
+      }
+      if (filterStatus && r.status !== filterStatus) return false;
+      if (searchQuery) {
+        const q = searchQuery.trim().toLowerCase();
+        const matches =
+          (r.studentName || "").toLowerCase().includes(q) ||
+          (r.studentEmail || "").toLowerCase().includes(q) ||
+          (r.studentPhone || "").toLowerCase().includes(q) ||
+          (r.studentRollNumber || "").toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      let aVal: string | number = "";
+      let bVal: string | number = "";
+      switch (sortField) {
+        case "name":    aVal = a.studentName.toLowerCase(); bVal = b.studentName.toLowerCase(); break;
+        case "date":    aVal = new Date(a.timestamp).getTime(); bVal = new Date(b.timestamp).getTime(); break;
+        case "score":   aVal = a.maxScore ? a.score / a.maxScore : 0; bVal = b.maxScore ? b.score / b.maxScore : 0; break;
+        case "rollno":  aVal = (a.studentRollNumber || "").toLowerCase(); bVal = (b.studentRollNumber || "").toLowerCase(); break;
+        case "class":   aVal = (a.studentClass || "").toLowerCase(); bVal = (b.studentClass || "").toLowerCase(); break;
+        case "subject": aVal = a.subject.toLowerCase(); bVal = b.subject.toLowerCase(); break;
+        case "status":  aVal = a.status.toLowerCase(); bVal = b.status.toLowerCase(); break;
+      }
+      if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
 
   const exportToExcel = () => {
     if (filteredResults.length === 0) {
@@ -490,7 +522,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       }
       return val;
     };
-    const headers = ["Name", "Roll No.", "Email", "Phone", "Class", "Division", "Subject", "Score", "Max Score", "Score %", "Date", "Has Photo", "Questions & Answers"];
+    const headers = ["Name", "Roll No.", "Email", "Phone", "Class", "Division", "Subject", "Score", "Max Score", "Score %", "Status", "Date", "Has Photo", "Questions & Answers"];
     const rows = filteredResults.map(r => {
       const transcript = r.transcript.map((t, i) =>
         `Q${i + 1}: ${t.question} | A: ${t.answer} | Score: ${t.score} | Feedback: ${t.feedback}`
@@ -506,6 +538,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
         String(r.score),
         String(r.maxScore),
         ((r.score / r.maxScore) * 100).toFixed(1),
+        escCsv(statusLabel(r.status)),
         new Date(r.timestamp).toLocaleDateString(),
         r.studentPhoto ? 'Yes' : 'No',
         escCsv(transcript),
@@ -520,6 +553,70 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     a.click();
     URL.revokeObjectURL(url);
     toast.success(`Exported ${filteredResults.length} results`);
+  };
+
+  const exportToWord = () => {
+    if (filteredResults.length === 0) {
+      toast.error("No results to export");
+      return;
+    }
+    const rows = filteredResults.map(r => {
+      const pct = r.maxScore ? ((r.score / r.maxScore) * 100).toFixed(1) : "0.0";
+      const qaRows = r.transcript.map((t, i) => `
+        <tr>
+          <td style="padding:4px 8px;border:1px solid #ccc;vertical-align:top;"><b>Q${i + 1}</b></td>
+          <td style="padding:4px 8px;border:1px solid #ccc;vertical-align:top;">${t.question}</td>
+          <td style="padding:4px 8px;border:1px solid #ccc;vertical-align:top;">${t.answer || "—"}</td>
+          <td style="padding:4px 8px;border:1px solid #ccc;vertical-align:top;">${t.score ?? "—"}</td>
+          <td style="padding:4px 8px;border:1px solid #ccc;vertical-align:top;">${t.feedback || "—"}</td>
+        </tr>`).join("");
+      return `
+        <div style="page-break-inside:avoid;margin-bottom:28px;border:1px solid #ddd;border-radius:6px;padding:16px;font-family:Arial,sans-serif;">
+          <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+            <tr><td style="width:140px;font-weight:bold;padding:2px 0;">Name</td><td>${r.studentName}</td>
+                <td style="width:140px;font-weight:bold;padding:2px 0;">Roll No.</td><td>${r.studentRollNumber || "—"}</td></tr>
+            <tr><td style="font-weight:bold;padding:2px 0;">Email</td><td>${r.studentEmail}</td>
+                <td style="font-weight:bold;padding:2px 0;">Phone</td><td>${r.studentPhone || "—"}</td></tr>
+            <tr><td style="font-weight:bold;padding:2px 0;">Class</td><td>${r.studentClass || "—"}</td>
+                <td style="font-weight:bold;padding:2px 0;">Division</td><td>${r.studentDivision || "—"}</td></tr>
+            <tr><td style="font-weight:bold;padding:2px 0;">Subject</td><td>${r.subject}</td>
+                <td style="font-weight:bold;padding:2px 0;">Date</td><td>${new Date(r.timestamp).toLocaleDateString()}</td></tr>
+            <tr><td style="font-weight:bold;padding:2px 0;">Score</td><td>${r.score}/${r.maxScore} (${pct}%)</td>
+                <td style="font-weight:bold;padding:2px 0;">Status</td><td><b>${statusLabel(r.status)}</b></td></tr>
+          </table>
+          ${r.transcript.length > 0 ? `
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead>
+              <tr style="background:#f3f4f6;">
+                <th style="padding:4px 8px;border:1px solid #ccc;">#</th>
+                <th style="padding:4px 8px;border:1px solid #ccc;">Question</th>
+                <th style="padding:4px 8px;border:1px solid #ccc;">Answer</th>
+                <th style="padding:4px 8px;border:1px solid #ccc;">Score</th>
+                <th style="padding:4px 8px;border:1px solid #ccc;">Feedback</th>
+              </tr>
+            </thead>
+            <tbody>${qaRows}</tbody>
+          </table>` : "<p style='color:#888;font-size:12px;'>No transcript available.</p>"}
+        </div>`;
+    }).join("");
+
+    const html = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head><meta charset='utf-8'><title>Viva Results</title></head>
+      <body style="font-family:Arial,sans-serif;font-size:13px;">
+        <h2 style="color:#5b21b6;margin-bottom:4px;">AI Mock Viva — Results Report</h2>
+        <p style="color:#888;margin-top:0;margin-bottom:24px;">Exported on ${new Date().toLocaleDateString()} · ${filteredResults.length} record(s)</p>
+        ${rows}
+      </body></html>`;
+
+    const blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `viva-results-${new Date().toISOString().split('T')[0]}.doc`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${filteredResults.length} results to Word`);
   };
 
   const stats = {
@@ -620,7 +717,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs"
-                        onClick={() => { setFilterClass(""); setFilterDivision(""); setFilterSubject(""); setFilterDate(""); setFilterUser(""); setSearchQuery(""); }}
+                        onClick={() => { setFilterClass(""); setFilterDivision(""); setFilterSubject(""); setFilterDate(""); setFilterUser(""); setSearchQuery(""); setFilterStatus(""); setSortField("date"); setSortDir("desc"); }}
                         data-testid="button-clear-filters"
                       >
                         <X className="h-3 w-3 mr-1" /> Clear all
@@ -637,7 +734,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                       data-testid="input-search-student"
                     />
                   </div>
-                  <div className={`grid grid-cols-2 ${isAdmin ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-2`}>
+                  <div className={`grid grid-cols-2 ${isAdmin ? 'md:grid-cols-6' : 'md:grid-cols-5'} gap-2`}>
                     {isAdmin && (
                       <select
                         value={filterUser}
@@ -676,6 +773,19 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                       <option value="">All Subjects</option>
                       {uniqueSubjectSlugs.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
+                    <select
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value)}
+                      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      data-testid="filter-status"
+                    >
+                      <option value="">All Statuses</option>
+                      <option value="completed">Completed</option>
+                      <option value="terminated">Terminated</option>
+                      <option value="evaluating">Evaluating</option>
+                      <option value="started">In Progress</option>
+                      <option value="reset_by_admin">Attempt Reset</option>
+                    </select>
                     <Input
                       type="date"
                       value={filterDate}
@@ -684,22 +794,59 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                       data-testid="filter-date"
                     />
                   </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">Sort by:</span>
+                    <select
+                      value={sortField}
+                      onChange={(e) => setSortField(e.target.value)}
+                      className="h-8 rounded-md border border-input bg-background px-2 text-xs flex-1 min-w-0"
+                      data-testid="sort-field"
+                    >
+                      <option value="date">Date</option>
+                      <option value="name">Name</option>
+                      <option value="score">Score %</option>
+                      <option value="rollno">Roll No.</option>
+                      <option value="class">Class</option>
+                      <option value="subject">Subject</option>
+                      <option value="status">Status</option>
+                    </select>
+                    <button
+                      onClick={() => setSortDir(d => d === "asc" ? "desc" : "asc")}
+                      className="h-8 px-2 rounded-md border border-input bg-background text-xs hover:bg-muted flex items-center gap-1 whitespace-nowrap"
+                      data-testid="sort-direction"
+                      title={sortDir === "asc" ? "Ascending" : "Descending"}
+                    >
+                      {sortDir === "asc" ? "↑ Asc" : "↓ Desc"}
+                    </button>
+                  </div>
                   <div className="flex items-center justify-between mt-2">
                     {hasActiveFilters ? (
                       <p className="text-xs text-muted-foreground">
                         Showing {filteredResults.length} of {results?.length || 0} results
                       </p>
                     ) : <span />}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={exportToExcel}
-                      disabled={filteredResults.length === 0}
-                      data-testid="button-export-excel"
-                    >
-                      <Download className="h-4 w-4 mr-1" />
-                      Export to Excel
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={exportToWord}
+                        disabled={filteredResults.length === 0}
+                        data-testid="button-export-word"
+                      >
+                        <Download className="h-4 w-4 mr-1" />
+                        Export to Word
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={exportToExcel}
+                        disabled={filteredResults.length === 0}
+                        data-testid="button-export-excel"
+                      >
+                        <Download className="h-4 w-4 mr-1" />
+                        Export to Excel
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
