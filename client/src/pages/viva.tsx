@@ -180,10 +180,16 @@ export default function VivaPage() {
     studentInfoRef.current = studentInfo;
   }, [studentInfo]);
 
+  const [subjectDeactivated, setSubjectDeactivated] = useState(false);
+
   const { data: subjectInfo, isLoading: subjectLoading } = useQuery<SubjectInfo | null>({
     queryKey: ["subject", subject],
     queryFn: async () => {
       const response = await fetch(`/api/subjects/${subject}`);
+      if (response.status === 403) {
+        setSubjectDeactivated(true);
+        return null;
+      }
       if (!response.ok) return null;
       return response.json();
     },
@@ -670,6 +676,22 @@ export default function VivaPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+      </div>
+    );
+  }
+
+  if (subjectDeactivated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="mx-auto w-16 h-16 rounded-full bg-yellow-500/20 flex items-center justify-center">
+            <XCircle className="h-8 w-8 text-yellow-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Exam Temporarily Unavailable</h2>
+          <p className="text-zinc-400 text-sm">
+            This exam has been temporarily deactivated by your teacher. Please check back later or contact your teacher for more information.
+          </p>
+        </div>
       </div>
     );
   }

@@ -28,6 +28,7 @@ export interface IStorage {
   countVivaAttempts(email: string, subject: string): Promise<number>;
   resetVivaAttempts(email: string, subject: string): Promise<void>;
   resetVivaAttemptsByIds(ids: number[]): Promise<void>;
+  toggleSubjectActive(id: number, isActive: boolean): Promise<void>;
 
   createSubject(subject: InsertSubject): Promise<Subject>;
   getSubjects(): Promise<Subject[]>;
@@ -131,6 +132,13 @@ export class DatabaseStorage implements IStorage {
       .update(vivaResults)
       .set({ status: "reset_by_admin" })
       .where(inArray(vivaResults.id, ids));
+  }
+
+  async toggleSubjectActive(id: number, isActive: boolean): Promise<void> {
+    await db
+      .update(subjects)
+      .set({ isActive })
+      .where(eq(subjects.id, id));
   }
 
   async createSubject(subject: InsertSubject): Promise<Subject> {

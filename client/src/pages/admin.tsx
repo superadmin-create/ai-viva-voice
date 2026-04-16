@@ -364,6 +364,25 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     },
   });
 
+  const toggleSubjectActiveMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
+      const response = await fetch(`/api/admin/subjects/${id}/toggle-active`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive }),
+      });
+      if (!response.ok) throw new Error("Failed to update subject");
+      return response.json();
+    },
+    onSuccess: (_, { isActive }) => {
+      toast.success(isActive ? "Subject activated — students can access it now." : "Subject deactivated — students can no longer access it.");
+      queryClient.invalidateQueries({ queryKey: ["subjects"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
   const bulkResetMutation = useMutation({
     mutationFn: async (ids: number[]) => {
       const response = await fetch("/api/admin/reset-attempts-bulk", {
@@ -874,7 +893,10 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
               <CardContent>
                 <div className="space-y-3">
                   {subjects?.map((subject) => (
-                    <div key={subject.slug} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div
+                      key={subject.slug}
+                      className={`flex items-center justify-between p-4 border rounded-lg transition-opacity ${subject.isActive === false ? "opacity-60 bg-muted/40" : ""}`}
+                    >
                       <div className="flex items-center gap-4">
                         <div>
                           <p className="font-medium">{subject.name}</p>
@@ -883,11 +905,17 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                         {subject.isBuiltIn && (
                           <Badge variant="secondary">Built-in</Badge>
                         )}
+                        {subject.isActive === false && (
+                          <Badge variant="outline" className="text-yellow-600 border-yellow-400 bg-yellow-50">
+                            Deactivated
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
+                          disabled={subject.isActive === false}
                           onClick={() => window.open(`/${subject.slug}`, '_blank')}
                         >
                           <ExternalLink className="h-4 w-4 mr-1" />
@@ -906,13 +934,27 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                           Copy Link
                         </Button>
                         {!subject.isBuiltIn && subject.id && (isAdmin || subject.createdBy === user.id) && (
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => deleteSubjectMutation.mutate(subject.id!)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={subject.isActive === false
+                                ? "border-green-500 text-green-600 hover:bg-green-50"
+                                : "border-yellow-500 text-yellow-600 hover:bg-yellow-50"}
+                              disabled={toggleSubjectActiveMutation.isPending}
+                              onClick={() => toggleSubjectActiveMutation.mutate({ id: subject.id!, isActive: subject.isActive !== false })}
+                              data-testid={`button-toggle-active-${subject.slug}`}
+                            >
+                              {subject.isActive === false ? "Activate" : "Deactivate"}
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => deleteSubjectMutation.mutate(subject.id!)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>

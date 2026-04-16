@@ -217,6 +217,9 @@ export async function registerRoutes(
       // Check custom subjects
       const custom = await storage.getSubjectBySlug(req.params.slug);
       if (custom) {
+        if (!custom.isActive) {
+          return res.status(403).json({ error: "Subject is currently deactivated." });
+        }
         return res.json({ 
           name: custom.name, 
           slug: custom.slug, 
@@ -657,6 +660,22 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error resetting attempts:", error);
       res.status(500).json({ error: "Failed to reset attempt" });
+    }
+  });
+
+  // Toggle subject active/inactive
+  app.patch("/api/admin/subjects/:id/toggle-active", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { isActive } = req.body;
+      if (typeof isActive !== "boolean") {
+        return res.status(400).json({ error: "isActive (boolean) is required" });
+      }
+      await storage.toggleSubjectActive(id, isActive);
+      res.json({ success: true, isActive });
+    } catch (error: any) {
+      console.error("Error toggling subject:", error);
+      res.status(500).json({ error: "Failed to update subject" });
     }
   });
 
