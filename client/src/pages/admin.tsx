@@ -71,6 +71,8 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [showResetPasswordDialog, setShowResetPasswordDialog] = useState<string | null>(null);
   const [selectedSubjectSlug, setSelectedSubjectSlug] = useState<string | null>(null);
   const [newSubject, setNewSubject] = useState({ name: "", curriculum: "", instructions: "", allowedEmails: "" });
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  const [editSubjectData, setEditSubjectData] = useState({ name: "", curriculum: "", instructions: "", allowedEmails: "" });
   const [newQuestion, setNewQuestion] = useState("");
   const [newUser, setNewUser] = useState({ username: "", password: "", role: "admin" });
   const [resetPassword, setResetPassword] = useState("");
@@ -385,6 +387,80 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       toast.error(error.message);
     },
   });
+
+  const updateSubjectMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Record<string, any> }) => {
+      const response = await fetch(`/api/admin/subjects/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to update subject");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast.success("Subject updated successfully!");
+      queryClient.invalidateQueries({ queryKey: ["subjects"] });
+      setEditingSubject(null);
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
+  const curriculumToText = (curriculum: { title: string; topics: string[] }[]): string =>
+    curriculum.map(m => `${m.title}:\n${m.topics.map(t => `- ${t}`).join('\n')}`).join('\n\n');
+
+  const openEditDialog = (subject: Subject) => {
+    setEditingSubject(subject);
+    setEditSubjectData({
+      name: subject.name,
+      curriculum: curriculumToText(subject.curriculum as { title: string; topics: string[] }[]),
+      instructions: subject.instructions ?? "",
+      allowedEmails: (subject.allowedEmails as string[] | null ?? []).join('\n'),
+    });
+  };
+
+  const handleUpdateSubject = () => {
+    if (!editingSubject?.id) return;
+    const lines = editSubjectData.curriculum.trim()
+      ? editSubjectData.curriculum.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0)
+      : [];
+    const curriculum: { title: string; topics: string[] }[] = [];
+    let currentModule: { title: string; topics: string[] } | null = null;
+    if (lines.length === 0) {
+      curriculum.push({ title: editSubjectData.name, topics: ["General topics"] });
+    } else {
+      for (const line of lines) {
+        if (line.endsWith(':')) {
+          if (currentModule) curriculum.push(currentModule);
+          currentModule = { title: line.slice(0, -1), topics: [] };
+        } else if (line.startsWith('- ') || (currentModule && !line.endsWith(':'))) {
+          const topic = line.startsWith('- ') ? line.slice(2).trim() : line;
+          if (currentModule) currentModule.topics.push(topic);
+          else currentModule = { title: "General Topics", topics: [topic] };
+        }
+      }
+      if (currentModule) curriculum.push(currentModule);
+    }
+    const parsedEmails = editSubjectData.allowedEmails
+      .split(/[\n,]/)
+      .map((e: string) => e.trim().toLowerCase())
+      .filter((e: string) => e.includes("@"));
+
+    updateSubjectMutation.mutate({
+      id: editingSubject.id,
+      data: {
+        name: editSubjectData.name,
+        curriculum,
+        instructions: editSubjectData.instructions.trim() || null,
+        allowedEmails: parsedEmails.length > 0 ? parsedEmails : [],
+      },
+    });
+  };
 
   const bulkResetMutation = useMutation({
     mutationFn: async (ids: number[]) => {
@@ -1085,6 +1161,15 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                             <Button
                               variant="outline"
                               size="sm"
+                              onClick={() => openEditDialog(subject)}
+                              data-testid={`button-edit-subject-${subject.slug}`}
+                            >
+                              <Edit2 className="h-4 w-4 mr-1" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
                               className={subject.isActive === false
                                 ? "border-green-500 text-green-600 hover:bg-green-50"
                                 : "border-yellow-500 text-yellow-600 hover:bg-yellow-50"}
@@ -1537,6 +1622,80 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
             <Button variant="outline" onClick={() => setShowSubjectDialog(false)}>Cancel</Button>
             <Button onClick={handleCreateSubject} disabled={!newSubject.name.trim()}>
               Create Subject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Subject Dialog */}
+      <Dialog open={!!editingSubject} onOpenChange={(open) => { if (!open) setEditingSubject(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Subject</DialogTitle>
+            <DialogDescription>
+              Update the subject details. The URL slug (<strong>/{editingSubject?.slug}</strong>) cannot be changed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Subject Name</Label>
+              <Input
+                placeholder="e.g., Introduction to Python"
+                value={editSubjectData.name}
+                onChange={(e) => setEditSubjectData({ ...editSubjectData, name: e.target.value })}
+                data-testid="input-edit-subject-name"
+              />
+            </div>
+            <div>
+              <Label>Curriculum Topics</Label>
+              <Textarea
+                placeholder={"e.g.:\n\nData Types:\n- Variables and constants\n- Strings and numbers\n\nControl Flow:\n- If/else statements\n- For and while loops"}
+                value={editSubjectData.curriculum}
+                onChange={(e) => setEditSubjectData({ ...editSubjectData, curriculum: e.target.value })}
+                className="min-h-[160px] text-sm"
+                data-testid="input-edit-curriculum"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Use a heading ending with <strong>:</strong> to group into modules. Topics go on lines below it.
+              </p>
+            </div>
+            <div>
+              <Label>
+                Exam Instructions{" "}
+                <span className="text-muted-foreground font-normal">(Optional)</span>
+              </Label>
+              <Textarea
+                placeholder={"e.g.:\nFocus only on practical application questions.\nScore strictly — penalise vague or one-word answers."}
+                value={editSubjectData.instructions}
+                onChange={(e) => setEditSubjectData({ ...editSubjectData, instructions: e.target.value })}
+                className="min-h-[100px] text-sm"
+                data-testid="input-edit-instructions"
+              />
+            </div>
+            <div>
+              <Label>
+                Allowed Emails{" "}
+                <span className="text-muted-foreground font-normal">(Optional — leave blank to allow all)</span>
+              </Label>
+              <Textarea
+                placeholder={"student1@example.com\nstudent2@example.com"}
+                value={editSubjectData.allowedEmails}
+                onChange={(e) => setEditSubjectData({ ...editSubjectData, allowedEmails: e.target.value })}
+                className="min-h-[80px] text-sm"
+                data-testid="input-edit-allowed-emails"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                One email per line or comma-separated. Leave blank to allow anyone.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingSubject(null)}>Cancel</Button>
+            <Button
+              onClick={handleUpdateSubject}
+              disabled={!editSubjectData.name.trim() || updateSubjectMutation.isPending}
+            >
+              {updateSubjectMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
