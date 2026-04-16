@@ -1174,7 +1174,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                                 ? "border-green-500 text-green-600 hover:bg-green-50"
                                 : "border-yellow-500 text-yellow-600 hover:bg-yellow-50"}
                               disabled={toggleSubjectActiveMutation.isPending}
-                              onClick={() => toggleSubjectActiveMutation.mutate({ id: subject.id!, isActive: subject.isActive !== false })}
+                              onClick={() => toggleSubjectActiveMutation.mutate({ id: subject.id!, isActive: subject.isActive !== true })}
                               data-testid={`button-toggle-active-${subject.slug}`}
                             >
                               {subject.isActive === false ? "Activate" : "Deactivate"}

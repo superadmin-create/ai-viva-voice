@@ -195,6 +195,7 @@ export async function registerRoutes(
         name: s.name,
         slug: s.slug,
         isBuiltIn: false,
+        isActive: s.isActive,
         ...(isAuthenticated ? { createdBy: s.createdBy } : {}),
       }));
       
