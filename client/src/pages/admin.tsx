@@ -81,6 +81,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [filterDate, setFilterDate] = useState("");
   const [filterUser, setFilterUser] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const { data: results, isLoading } = useQuery<VivaResult[]>({
     queryKey: ["admin-results"],
@@ -357,6 +358,26 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     onSuccess: () => {
       toast.success("Attempt reset! Student can now retake the exam.");
       queryClient.invalidateQueries({ queryKey: ["results"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
+  const bulkResetMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      const response = await fetch("/api/admin/reset-attempts-bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!response.ok) throw new Error("Failed to bulk reset attempts");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success(`${data.count} attempt(s) reset — students can now retake the exam.`);
+      setSelectedIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ["admin-results"] });
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -672,6 +693,23 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-10">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-gray-300 accent-violet-600 cursor-pointer"
+                              checked={filteredResults.filter(r => r.status === "terminated").length > 0 && filteredResults.filter(r => r.status === "terminated").every(r => selectedIds.has(r.id))}
+                              onChange={(e) => {
+                                const terminatedIds = filteredResults.filter(r => r.status === "terminated").map(r => r.id);
+                                if (e.target.checked) {
+                                  setSelectedIds(prev => new Set([...prev, ...terminatedIds]));
+                                } else {
+                                  setSelectedIds(prev => { const next = new Set(prev); terminatedIds.forEach(id => next.delete(id)); return next; });
+                                }
+                              }}
+                              title="Select all terminated"
+                              data-testid="checkbox-select-all-terminated"
+                            />
+                          </TableHead>
                           <TableHead>Student</TableHead>
                           <TableHead>Subject</TableHead>
                           <TableHead>Score</TableHead>
@@ -685,10 +723,27 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                         {filteredResults.map((result) => (
                           <TableRow
                             key={result.id}
-                            className="cursor-pointer hover:bg-violet-50"
+                            className={`cursor-pointer hover:bg-violet-50 ${selectedIds.has(result.id) ? "bg-violet-50" : ""}`}
                             onClick={() => setSelectedResult(result)}
                             data-testid={`row-result-${result.id}`}
                           >
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                              {result.status === "terminated" && (
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded border-gray-300 accent-violet-600 cursor-pointer"
+                                  checked={selectedIds.has(result.id)}
+                                  onChange={(e) => {
+                                    setSelectedIds(prev => {
+                                      const next = new Set(prev);
+                                      e.target.checked ? next.add(result.id) : next.delete(result.id);
+                                      return next;
+                                    });
+                                  }}
+                                  data-testid={`checkbox-result-${result.id}`}
+                                />
+                              )}
+                            </TableCell>
                             <TableCell>
                               <div>
                                 <div className="font-medium">{result.studentName}</div>
@@ -769,6 +824,35 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">
                     {hasActiveFilters ? "No results match the selected filters" : "No examination results yet"}
+                  </div>
+                )}
+
+                {selectedIds.size > 0 && (
+                  <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-zinc-900 text-white px-5 py-3 rounded-xl shadow-2xl border border-zinc-700" data-testid="bulk-action-bar">
+                    <span className="text-sm font-medium">{selectedIds.size} terminated {selectedIds.size === 1 ? "record" : "records"} selected</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs border-zinc-500 text-white bg-transparent hover:bg-zinc-700"
+                      onClick={() => setSelectedIds(new Set())}
+                      data-testid="button-deselect-all"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Deselect All
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs bg-orange-500 hover:bg-orange-600 text-white"
+                      disabled={bulkResetMutation.isPending}
+                      onClick={() => bulkResetMutation.mutate(Array.from(selectedIds))}
+                      data-testid="button-bulk-reset"
+                    >
+                      {bulkResetMutation.isPending ? (
+                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Resetting…</>
+                      ) : (
+                        "Allow Re-attempt"
+                      )}
+                    </Button>
                   </div>
                 )}
               </CardContent>

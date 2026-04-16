@@ -660,6 +660,22 @@ export async function registerRoutes(
     }
   });
 
+  // Bulk reset attempts by result IDs
+  app.post("/api/admin/reset-attempts-bulk", requireAuth, async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "ids array is required" });
+      }
+      const numericIds = ids.map(Number).filter(n => !isNaN(n));
+      await storage.resetVivaAttemptsByIds(numericIds);
+      res.json({ success: true, count: numericIds.length });
+    } catch (error: any) {
+      console.error("Error bulk resetting attempts:", error);
+      res.status(500).json({ error: "Failed to bulk reset attempts" });
+    }
+  });
+
   // Check attempt limit for a student/subject combo
   app.get("/api/viva/check-attempts", async (req, res) => {
     try {

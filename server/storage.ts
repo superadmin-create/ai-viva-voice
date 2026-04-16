@@ -27,6 +27,7 @@ export interface IStorage {
   updateVivaPhoto(id: number, photo: string): Promise<void>;
   countVivaAttempts(email: string, subject: string): Promise<number>;
   resetVivaAttempts(email: string, subject: string): Promise<void>;
+  resetVivaAttemptsByIds(ids: number[]): Promise<void>;
 
   createSubject(subject: InsertSubject): Promise<Subject>;
   getSubjects(): Promise<Subject[]>;
@@ -122,6 +123,14 @@ export class DatabaseStorage implements IStorage {
       .update(vivaResults)
       .set({ status: "reset_by_admin" })
       .where(and(eq(vivaResults.studentEmail, email), eq(vivaResults.subject, subject)));
+  }
+
+  async resetVivaAttemptsByIds(ids: number[]): Promise<void> {
+    if (ids.length === 0) return;
+    await db
+      .update(vivaResults)
+      .set({ status: "reset_by_admin" })
+      .where(inArray(vivaResults.id, ids));
   }
 
   async createSubject(subject: InsertSubject): Promise<Subject> {
