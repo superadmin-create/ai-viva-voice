@@ -222,6 +222,7 @@ export async function registerRoutes(
           slug: custom.slug, 
           modules: custom.curriculum,
           instructions: custom.instructions ?? null,
+          allowedEmails: custom.allowedEmails ?? [],
           isBuiltIn: false 
         });
       }
@@ -536,6 +537,16 @@ export async function registerRoutes(
       if (!studentEmail || !subject) {
         return res.status(400).json({ error: "studentEmail and subject are required" });
       }
+
+      // Check allowed emails restriction for custom subjects
+      const subjectData = await storage.getSubjectBySlug(subject);
+      if (subjectData && subjectData.allowedEmails && subjectData.allowedEmails.length > 0) {
+        const normalised = subjectData.allowedEmails.map((e: string) => e.trim().toLowerCase());
+        if (!normalised.includes(studentEmail.trim().toLowerCase())) {
+          return res.status(403).json({ error: "Your email is not authorised to take this exam." });
+        }
+      }
+
       const result = await storage.createVivaResult({
         studentName: studentName || "",
         studentEmail,

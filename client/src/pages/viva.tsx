@@ -39,6 +39,7 @@ type SubjectInfo = {
   name: string;
   slug: string;
   modules: { title: string; topics: string[] }[];
+  allowedEmails?: string[];
 };
 
 const MAX_RECORDING_MS = 45000;
@@ -600,6 +601,16 @@ export default function VivaPage() {
       if (checkData.limitReached) {
         setAttemptLimitReached(true);
         return;
+      }
+
+      // Client-side allowed email check (server enforces this too)
+      if (subjectInfo?.allowedEmails && subjectInfo.allowedEmails.length > 0) {
+        const allowed = subjectInfo.allowedEmails.map((e) => e.trim().toLowerCase());
+        if (!allowed.includes(studentInfo.email.trim().toLowerCase())) {
+          toast.error("Your email is not authorised to take this exam.");
+          setIsStarting(false);
+          return;
+        }
       }
 
       // Lock the attempt slot immediately so no parallel tab / refresh can bypass the limit

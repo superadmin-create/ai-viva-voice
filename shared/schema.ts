@@ -60,6 +60,7 @@ export const subjects = pgTable("subjects", {
     topics: string[];
   }>>(),
   instructions: text("instructions"),
+  allowedEmails: text("allowed_emails").array(),
   createdBy: varchar("created_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

@@ -70,7 +70,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [showUserDialog, setShowUserDialog] = useState(false);
   const [showResetPasswordDialog, setShowResetPasswordDialog] = useState<string | null>(null);
   const [selectedSubjectSlug, setSelectedSubjectSlug] = useState<string | null>(null);
-  const [newSubject, setNewSubject] = useState({ name: "", curriculum: "", instructions: "" });
+  const [newSubject, setNewSubject] = useState({ name: "", curriculum: "", instructions: "", allowedEmails: "" });
   const [newQuestion, setNewQuestion] = useState("");
   const [newUser, setNewUser] = useState({ username: "", password: "", role: "admin" });
   const [resetPassword, setResetPassword] = useState("");
@@ -180,7 +180,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       queryClient.invalidateQueries({ queryKey: ["subjects"] });
       toast.success("Subject created successfully!");
       setShowSubjectDialog(false);
-      setNewSubject({ name: "", curriculum: "", instructions: "" });
+      setNewSubject({ name: "", curriculum: "", instructions: "", allowedEmails: "" });
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -390,11 +390,17 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     }
 
     const autoSlug = newSubject.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    const parsedEmails = newSubject.allowedEmails
+      .split(/[\n,]/)
+      .map((e: string) => e.trim().toLowerCase())
+      .filter((e: string) => e.includes("@"));
+
     createSubjectMutation.mutate({
       name: newSubject.name,
       slug: autoSlug,
       curriculum,
       ...(newSubject.instructions.trim() ? { instructions: newSubject.instructions.trim() } : {}),
+      ...(parsedEmails.length > 0 ? { allowedEmails: parsedEmails } : {}),
     });
   };
 
@@ -1215,6 +1221,22 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
               />
               <p className="text-xs text-muted-foreground mt-2">
                 These instructions are passed directly to the AI to control how it generates questions and evaluates answers for this subject.
+              </p>
+            </div>
+            <div>
+              <Label>
+                Allowed Emails{" "}
+                <span className="text-muted-foreground font-normal">(Optional — leave blank to allow all)</span>
+              </Label>
+              <Textarea
+                placeholder={"student1@example.com\nstudent2@example.com\nstudent3@example.com"}
+                value={newSubject.allowedEmails}
+                onChange={(e) => setNewSubject({ ...newSubject, allowedEmails: e.target.value })}
+                className="min-h-[100px] text-sm"
+                data-testid="input-allowed-emails"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Enter one email per line (or comma-separated). Only these students will be able to start this exam. Leave blank to allow anyone.
               </p>
             </div>
           </div>

@@ -87,6 +87,7 @@ app.use((req, res, next) => {
     await client.query(`
       ALTER TABLE viva_results ADD COLUMN IF NOT EXISTS student_photo text;
       ALTER TABLE viva_results ADD COLUMN IF NOT EXISTS student_roll_number text NOT NULL DEFAULT '';
+      ALTER TABLE subjects ADD COLUMN IF NOT EXISTS allowed_emails text[];
     `);
     client.release();
     console.log("Database schema up to date");
