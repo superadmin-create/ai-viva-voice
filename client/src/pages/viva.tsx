@@ -534,10 +534,19 @@ export default function VivaPage() {
       recorder.start();
       setIsListening(true);
       startSilenceTimer();
-    } catch (e) {
+    } catch (e: any) {
       console.error("Mic access error:", e);
-      toast.error("Could not access microphone");
       setIsListening(false);
+      if (e?.name === "NotAllowedError" || e?.name === "PermissionDeniedError") {
+        toast.error(
+          "Microphone access blocked. On Android: close any floating chat bubbles or overlay apps, then tap Retry.",
+          { duration: 6000 }
+        );
+      } else if (e?.name === "NotFoundError") {
+        toast.error("No microphone found on this device.", { duration: 5000 });
+      } else {
+        toast.error("Could not access microphone. Please check your browser permissions.", { duration: 5000 });
+      }
     }
   }, [startSilenceTimer, sendAudioForTranscription]);
 
@@ -1098,6 +1107,10 @@ export default function VivaPage() {
                   : isTranscribing
                     ? "Processing your answer..."
                     : "Microphone stopped — click Next when ready"}
+              </p>
+
+              <p className="text-[10px] text-zinc-600 text-center leading-tight mt-1">
+                <span className="font-medium text-zinc-500">Android tip:</span> If permission is blocked, close any floating chat bubbles or overlay apps, then tap Retry.
               </p>
             </CardContent>
           </Card>
