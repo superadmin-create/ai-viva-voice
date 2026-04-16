@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, XCircle, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy, Upload, FileText, Filter, X, Download, Clock } from "lucide-react";
+import { Loader2, TrendingUp, Users, BookOpen, CheckCircle2, XCircle, Plus, Trash2, Edit2, ExternalLink, LogOut, Shield, UserPlus, Key, Copy, Upload, FileText, Filter, X, Download, Clock, Search } from "lucide-react";
 import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -80,6 +80,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [filterSubject, setFilterSubject] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [filterUser, setFilterUser] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: results, isLoading } = useQuery<VivaResult[]>({
     queryKey: ["admin-results"],
@@ -412,7 +413,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const uniqueClasses = [...new Set((results || []).map(r => r.studentClass).filter(Boolean))].sort();
   const uniqueDivisions = [...new Set((results || []).map(r => r.studentDivision).filter(Boolean))].sort();
   const uniqueSubjectSlugs = [...new Set((results || []).map(r => r.subject))].sort();
-  const hasActiveFilters = filterClass || filterDivision || filterSubject || filterDate || filterUser;
+  const hasActiveFilters = filterClass || filterDivision || filterSubject || filterDate || filterUser || searchQuery;
 
   const filteredResults = (results || []).filter(r => {
     if (filterClass && r.studentClass !== filterClass) return false;
@@ -425,6 +426,15 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     if (filterDate) {
       const resultDate = new Date(r.timestamp).toISOString().split('T')[0];
       if (resultDate !== filterDate) return false;
+    }
+    if (searchQuery) {
+      const q = searchQuery.trim().toLowerCase();
+      const matches =
+        (r.studentName || "").toLowerCase().includes(q) ||
+        (r.studentEmail || "").toLowerCase().includes(q) ||
+        (r.studentPhone || "").toLowerCase().includes(q) ||
+        (r.studentRollNumber || "").toLowerCase().includes(q);
+      if (!matches) return false;
     }
     return true;
   });
@@ -570,12 +580,22 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs"
-                        onClick={() => { setFilterClass(""); setFilterDivision(""); setFilterSubject(""); setFilterDate(""); setFilterUser(""); }}
+                        onClick={() => { setFilterClass(""); setFilterDivision(""); setFilterSubject(""); setFilterDate(""); setFilterUser(""); setSearchQuery(""); }}
                         data-testid="button-clear-filters"
                       >
                         <X className="h-3 w-3 mr-1" /> Clear all
                       </Button>
                     )}
+                  </div>
+                  <div className="relative mb-2">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      placeholder="Search by name, email, phone or roll number…"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9 h-9 text-sm"
+                      data-testid="input-search-student"
+                    />
                   </div>
                   <div className={`grid grid-cols-2 ${isAdmin ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-2`}>
                     {isAdmin && (
