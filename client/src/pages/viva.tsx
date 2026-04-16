@@ -18,6 +18,7 @@ import {
   MicOff,
   Volume2,
   CheckCircle2,
+  XCircle,
   User,
   Mail,
   Phone,
@@ -178,7 +179,7 @@ export default function VivaPage() {
     studentInfoRef.current = studentInfo;
   }, [studentInfo]);
 
-  const { data: subjectInfo } = useQuery<SubjectInfo>({
+  const { data: subjectInfo, isLoading: subjectLoading } = useQuery<SubjectInfo | null>({
     queryKey: ["subject", subject],
     queryFn: async () => {
       const response = await fetch(`/api/subjects/${subject}`);
@@ -653,6 +654,30 @@ export default function VivaPage() {
   };
 
   const displaySubjectName = subjectInfo?.name || subject.replace(/-/g, " ");
+
+  if (subjectLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+      </div>
+    );
+  }
+
+  if (!subjectInfo) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="mx-auto w-16 h-16 rounded-full bg-red-600/20 flex items-center justify-center">
+            <XCircle className="h-8 w-8 text-red-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Subject Not Found</h2>
+          <p className="text-zinc-400 text-sm">
+            This exam link is no longer active or the subject has been removed. Please contact your teacher for the correct link.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (step === "register") {
     return (
