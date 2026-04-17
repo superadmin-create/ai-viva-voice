@@ -103,6 +103,8 @@ export default function VivaPage() {
   const [micGranted, setMicGranted] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [micError, setMicError] = useState("");
+  const [isRequestingCamera, setIsRequestingCamera] = useState(false);
+  const [isRequestingMic, setIsRequestingMic] = useState(false);
 
   const [questions, setQuestions] = useState<string[]>(() => {
     try {
@@ -645,26 +647,34 @@ export default function VivaPage() {
   };
 
   const requestCameraPermission = async () => {
+    if (isRequestingCamera) return;
     setCameraError("");
+    setIsRequestingCamera(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       stream.getTracks().forEach((t) => t.stop());
       setCameraGranted(true);
     } catch {
       setCameraGranted(false);
-      setCameraError("Camera access denied. Please allow camera in your browser settings.");
+      setCameraError("Access denied. Tap the toggle to try again, or allow camera in browser settings.");
+    } finally {
+      setIsRequestingCamera(false);
     }
   };
 
   const requestMicPermission = async () => {
+    if (isRequestingMic) return;
     setMicError("");
+    setIsRequestingMic(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((t) => t.stop());
       setMicGranted(true);
     } catch {
       setMicGranted(false);
-      setMicError("Microphone access denied. Please allow microphone in your browser settings.");
+      setMicError("Access denied. Tap the toggle to try again, or allow microphone in browser settings.");
+    } finally {
+      setIsRequestingMic(false);
     }
   };
 
@@ -1028,37 +1038,51 @@ export default function VivaPage() {
           </CardHeader>
           <CardContent className="space-y-4 px-4 sm:px-6 pb-6">
             <div className="space-y-3">
-              <div
-                className={`flex items-center justify-between rounded-xl border p-4 transition-colors ${
+              <button
+                onClick={() => {
+                  if (!cameraGranted) requestCameraPermission();
+                  else setCameraGranted(false);
+                }}
+                disabled={isRequestingCamera}
+                data-testid="row-camera-permission"
+                className={`w-full flex items-center justify-between rounded-xl border p-4 transition-all text-left ${
                   cameraGranted
                     ? "border-green-500/50 bg-green-500/10"
-                    : "border-zinc-600 bg-zinc-700/40"
-                }`}
-                data-testid="row-camera-permission"
+                    : cameraError
+                    ? "border-red-500/50 bg-red-500/10"
+                    : "border-zinc-600 bg-zinc-700/40 hover:border-zinc-500"
+                } ${isRequestingCamera ? "opacity-70 cursor-wait" : "cursor-pointer"}`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${cameraGranted ? "bg-green-500/20" : "bg-zinc-600/50"}`}>
-                    {cameraGranted ? (
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    cameraGranted ? "bg-green-500/20" : cameraError ? "bg-red-500/20" : "bg-zinc-600/50"
+                  }`}>
+                    {isRequestingCamera ? (
+                      <Loader2 className="h-5 w-5 text-violet-400 animate-spin" />
+                    ) : cameraGranted ? (
                       <Camera className="h-5 w-5 text-green-400" />
                     ) : (
-                      <VideoOff className="h-5 w-5 text-zinc-400" />
+                      <VideoOff className={`h-5 w-5 ${cameraError ? "text-red-400" : "text-zinc-400"}`} />
                     )}
                   </div>
                   <div>
                     <p className="text-white font-medium text-sm">Camera Access</p>
-                    <p className={`text-xs ${cameraGranted ? "text-green-400" : "text-zinc-400"}`}>
-                      {cameraGranted ? "Access granted" : "Required for exam monitoring"}
+                    <p className={`text-xs ${
+                      cameraGranted ? "text-green-400" : cameraError ? "text-red-400" : "text-zinc-400"
+                    }`}>
+                      {isRequestingCamera
+                        ? "Waiting for permission..."
+                        : cameraGranted
+                        ? "Access granted"
+                        : cameraError
+                        ? "Tap to try again"
+                        : "Tap to allow camera access"}
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => {
-                    if (!cameraGranted) requestCameraPermission();
-                    else setCameraGranted(false);
-                  }}
-                  data-testid="toggle-camera"
-                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${
-                    cameraGranted ? "bg-green-500" : "bg-zinc-600"
+                <div
+                  className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors ${
+                    cameraGranted ? "bg-green-500" : cameraError ? "bg-red-500/50" : "bg-zinc-600"
                   }`}
                 >
                   <span
@@ -1066,43 +1090,59 @@ export default function VivaPage() {
                       cameraGranted ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
-                </button>
-              </div>
+                </div>
+              </button>
               {cameraError && (
-                <p className="text-xs text-red-400 px-1" data-testid="error-camera">{cameraError}</p>
+                <p className="text-xs text-red-400 px-1" data-testid="error-camera">
+                  {cameraError}
+                </p>
               )}
 
-              <div
-                className={`flex items-center justify-between rounded-xl border p-4 transition-colors ${
+              <button
+                onClick={() => {
+                  if (!micGranted) requestMicPermission();
+                  else setMicGranted(false);
+                }}
+                disabled={isRequestingMic}
+                data-testid="row-mic-permission"
+                className={`w-full flex items-center justify-between rounded-xl border p-4 transition-all text-left ${
                   micGranted
                     ? "border-green-500/50 bg-green-500/10"
-                    : "border-zinc-600 bg-zinc-700/40"
-                }`}
-                data-testid="row-mic-permission"
+                    : micError
+                    ? "border-red-500/50 bg-red-500/10"
+                    : "border-zinc-600 bg-zinc-700/40 hover:border-zinc-500"
+                } ${isRequestingMic ? "opacity-70 cursor-wait" : "cursor-pointer"}`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${micGranted ? "bg-green-500/20" : "bg-zinc-600/50"}`}>
-                    {micGranted ? (
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    micGranted ? "bg-green-500/20" : micError ? "bg-red-500/20" : "bg-zinc-600/50"
+                  }`}>
+                    {isRequestingMic ? (
+                      <Loader2 className="h-5 w-5 text-violet-400 animate-spin" />
+                    ) : micGranted ? (
                       <Mic className="h-5 w-5 text-green-400" />
                     ) : (
-                      <MicOff className="h-5 w-5 text-zinc-400" />
+                      <MicOff className={`h-5 w-5 ${micError ? "text-red-400" : "text-zinc-400"}`} />
                     )}
                   </div>
                   <div>
                     <p className="text-white font-medium text-sm">Microphone Access</p>
-                    <p className={`text-xs ${micGranted ? "text-green-400" : "text-zinc-400"}`}>
-                      {micGranted ? "Access granted" : "Required to record your answers"}
+                    <p className={`text-xs ${
+                      micGranted ? "text-green-400" : micError ? "text-red-400" : "text-zinc-400"
+                    }`}>
+                      {isRequestingMic
+                        ? "Waiting for permission..."
+                        : micGranted
+                        ? "Access granted"
+                        : micError
+                        ? "Tap to try again"
+                        : "Tap to allow microphone access"}
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => {
-                    if (!micGranted) requestMicPermission();
-                    else setMicGranted(false);
-                  }}
-                  data-testid="toggle-mic"
-                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${
-                    micGranted ? "bg-green-500" : "bg-zinc-600"
+                <div
+                  className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors ${
+                    micGranted ? "bg-green-500" : micError ? "bg-red-500/50" : "bg-zinc-600"
                   }`}
                 >
                   <span
@@ -1110,10 +1150,12 @@ export default function VivaPage() {
                       micGranted ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
-                </button>
-              </div>
+                </div>
+              </button>
               {micError && (
-                <p className="text-xs text-red-400 px-1" data-testid="error-mic">{micError}</p>
+                <p className="text-xs text-red-400 px-1" data-testid="error-mic">
+                  {micError}
+                </p>
               )}
             </div>
 
