@@ -787,6 +787,17 @@ export default function VivaPage() {
       vivaResultIdRef.current = startData.id;
 
       rawAnswersRef.current = [];
+      // Reset exam state so a fresh attempt always starts at Q1
+      setCurrentQuestionIndex(0);
+      setCurrentAnswer("");
+      setQuestions([]);
+      setCompletedQuestions([]);
+      setAnswerRecordedSuccess(false);
+      setHasRecorded(false);
+      try {
+        sessionStorage.removeItem(`${sessionKey}_questions`);
+        sessionStorage.removeItem(`${sessionKey}_qIndex`);
+      } catch {}
       setStep("preparing");
 
       const result = await generateQuestionsMutation.mutateAsync(subject);
