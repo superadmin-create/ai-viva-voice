@@ -646,17 +646,34 @@ export default function VivaPage() {
     }
   };
 
+  const checkPermissionState = async (name: "camera" | "microphone"): Promise<PermissionState | null> => {
+    try {
+      if (!navigator.permissions) return null;
+      const status = await navigator.permissions.query({ name: name as PermissionName });
+      return status.state;
+    } catch {
+      return null;
+    }
+  };
+
   const requestCameraPermission = async () => {
     if (isRequestingCamera) return;
     setCameraError("");
     setIsRequestingCamera(true);
     try {
+      const state = await checkPermissionState("camera");
+      if (state === "denied") {
+        setCameraGranted(false);
+        setCameraError("blocked");
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       stream.getTracks().forEach((t) => t.stop());
       setCameraGranted(true);
+      setCameraError("");
     } catch {
       setCameraGranted(false);
-      setCameraError("Access denied. Tap the toggle to try again, or allow camera in browser settings.");
+      setCameraError("blocked");
     } finally {
       setIsRequestingCamera(false);
     }
@@ -667,16 +684,50 @@ export default function VivaPage() {
     setMicError("");
     setIsRequestingMic(true);
     try {
+      const state = await checkPermissionState("microphone");
+      if (state === "denied") {
+        setMicGranted(false);
+        setMicError("blocked");
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((t) => t.stop());
       setMicGranted(true);
+      setMicError("");
     } catch {
       setMicGranted(false);
-      setMicError("Access denied. Tap the toggle to try again, or allow microphone in browser settings.");
+      setMicError("blocked");
     } finally {
       setIsRequestingMic(false);
     }
   };
+
+  useEffect(() => {
+    if (step !== "permissions") return;
+    let cameraStatus: PermissionStatus | null = null;
+    let micStatus: PermissionStatus | null = null;
+    const setupListeners = async () => {
+      try {
+        cameraStatus = await navigator.permissions.query({ name: "camera" as PermissionName });
+        cameraStatus.onchange = () => {
+          if (cameraStatus!.state === "granted") { setCameraGranted(true); setCameraError(""); }
+          else if (cameraStatus!.state === "prompt") { setCameraGranted(false); setCameraError(""); }
+          else { setCameraGranted(false); setCameraError("blocked"); }
+        };
+        micStatus = await navigator.permissions.query({ name: "microphone" as PermissionName });
+        micStatus.onchange = () => {
+          if (micStatus!.state === "granted") { setMicGranted(true); setMicError(""); }
+          else if (micStatus!.state === "prompt") { setMicGranted(false); setMicError(""); }
+          else { setMicGranted(false); setMicError("blocked"); }
+        };
+      } catch {}
+    };
+    setupListeners();
+    return () => {
+      if (cameraStatus) cameraStatus.onchange = null;
+      if (micStatus) micStatus.onchange = null;
+    };
+  }, [step]);
 
   const startExam = async () => {
     if (
@@ -1039,10 +1090,7 @@ export default function VivaPage() {
           <CardContent className="space-y-4 px-4 sm:px-6 pb-6">
             <div className="space-y-3">
               <button
-                onClick={() => {
-                  if (!cameraGranted) requestCameraPermission();
-                  else setCameraGranted(false);
-                }}
+                onClick={() => { if (!cameraGranted) requestCameraPermission(); else setCameraGranted(false); }}
                 disabled={isRequestingCamera}
                 data-testid="row-camera-permission"
                 className={`w-full flex items-center justify-between rounded-xl border p-4 transition-all text-left ${
@@ -1057,52 +1105,37 @@ export default function VivaPage() {
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                     cameraGranted ? "bg-green-500/20" : cameraError ? "bg-red-500/20" : "bg-zinc-600/50"
                   }`}>
-                    {isRequestingCamera ? (
-                      <Loader2 className="h-5 w-5 text-violet-400 animate-spin" />
-                    ) : cameraGranted ? (
-                      <Camera className="h-5 w-5 text-green-400" />
-                    ) : (
-                      <VideoOff className={`h-5 w-5 ${cameraError ? "text-red-400" : "text-zinc-400"}`} />
-                    )}
+                    {isRequestingCamera
+                      ? <Loader2 className="h-5 w-5 text-violet-400 animate-spin" />
+                      : cameraGranted
+                      ? <Camera className="h-5 w-5 text-green-400" />
+                      : <VideoOff className={`h-5 w-5 ${cameraError ? "text-red-400" : "text-zinc-400"}`} />}
                   </div>
                   <div>
                     <p className="text-white font-medium text-sm">Camera Access</p>
-                    <p className={`text-xs ${
-                      cameraGranted ? "text-green-400" : cameraError ? "text-red-400" : "text-zinc-400"
-                    }`}>
-                      {isRequestingCamera
-                        ? "Waiting for permission..."
-                        : cameraGranted
-                        ? "Access granted"
-                        : cameraError
-                        ? "Tap to try again"
-                        : "Tap to allow camera access"}
+                    <p className={`text-xs ${cameraGranted ? "text-green-400" : cameraError ? "text-red-400" : "text-zinc-400"}`}>
+                      {isRequestingCamera ? "Waiting for permission..." : cameraGranted ? "Access granted" : cameraError ? "Blocked — see instructions below" : "Tap to allow camera access"}
                     </p>
                   </div>
                 </div>
-                <div
-                  className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors ${
-                    cameraGranted ? "bg-green-500" : cameraError ? "bg-red-500/50" : "bg-zinc-600"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                      cameraGranted ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
+                <div className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors ${cameraGranted ? "bg-green-500" : cameraError ? "bg-red-500/50" : "bg-zinc-600"}`}>
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${cameraGranted ? "translate-x-6" : "translate-x-1"}`} />
                 </div>
               </button>
               {cameraError && (
-                <p className="text-xs text-red-400 px-1" data-testid="error-camera">
-                  {cameraError}
-                </p>
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5 space-y-1" data-testid="error-camera">
+                  <p className="text-xs font-semibold text-red-400">Camera is blocked by your browser</p>
+                  <p className="text-xs text-red-300">
+                    On Chrome: tap the <strong>lock icon</strong> (or <strong>camera icon</strong>) in the address bar → tap <strong>Camera</strong> → change to <strong>Allow</strong> → refresh this page.
+                  </p>
+                  <p className="text-xs text-red-300">
+                    On Safari: go to <strong>Settings → Safari → Camera</strong> → set to <strong>Allow</strong> → come back here.
+                  </p>
+                </div>
               )}
 
               <button
-                onClick={() => {
-                  if (!micGranted) requestMicPermission();
-                  else setMicGranted(false);
-                }}
+                onClick={() => { if (!micGranted) requestMicPermission(); else setMicGranted(false); }}
                 disabled={isRequestingMic}
                 data-testid="row-mic-permission"
                 className={`w-full flex items-center justify-between rounded-xl border p-4 transition-all text-left ${
@@ -1117,45 +1150,33 @@ export default function VivaPage() {
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                     micGranted ? "bg-green-500/20" : micError ? "bg-red-500/20" : "bg-zinc-600/50"
                   }`}>
-                    {isRequestingMic ? (
-                      <Loader2 className="h-5 w-5 text-violet-400 animate-spin" />
-                    ) : micGranted ? (
-                      <Mic className="h-5 w-5 text-green-400" />
-                    ) : (
-                      <MicOff className={`h-5 w-5 ${micError ? "text-red-400" : "text-zinc-400"}`} />
-                    )}
+                    {isRequestingMic
+                      ? <Loader2 className="h-5 w-5 text-violet-400 animate-spin" />
+                      : micGranted
+                      ? <Mic className="h-5 w-5 text-green-400" />
+                      : <MicOff className={`h-5 w-5 ${micError ? "text-red-400" : "text-zinc-400"}`} />}
                   </div>
                   <div>
                     <p className="text-white font-medium text-sm">Microphone Access</p>
-                    <p className={`text-xs ${
-                      micGranted ? "text-green-400" : micError ? "text-red-400" : "text-zinc-400"
-                    }`}>
-                      {isRequestingMic
-                        ? "Waiting for permission..."
-                        : micGranted
-                        ? "Access granted"
-                        : micError
-                        ? "Tap to try again"
-                        : "Tap to allow microphone access"}
+                    <p className={`text-xs ${micGranted ? "text-green-400" : micError ? "text-red-400" : "text-zinc-400"}`}>
+                      {isRequestingMic ? "Waiting for permission..." : micGranted ? "Access granted" : micError ? "Blocked — see instructions below" : "Tap to allow microphone access"}
                     </p>
                   </div>
                 </div>
-                <div
-                  className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors ${
-                    micGranted ? "bg-green-500" : micError ? "bg-red-500/50" : "bg-zinc-600"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                      micGranted ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
+                <div className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors ${micGranted ? "bg-green-500" : micError ? "bg-red-500/50" : "bg-zinc-600"}`}>
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${micGranted ? "translate-x-6" : "translate-x-1"}`} />
                 </div>
               </button>
               {micError && (
-                <p className="text-xs text-red-400 px-1" data-testid="error-mic">
-                  {micError}
-                </p>
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5 space-y-1" data-testid="error-mic">
+                  <p className="text-xs font-semibold text-red-400">Microphone is blocked by your browser</p>
+                  <p className="text-xs text-red-300">
+                    On Chrome: tap the <strong>lock icon</strong> (or <strong>mic icon</strong>) in the address bar → tap <strong>Microphone</strong> → change to <strong>Allow</strong> → refresh this page.
+                  </p>
+                  <p className="text-xs text-red-300">
+                    On Safari: go to <strong>Settings → Safari → Microphone</strong> → set to <strong>Allow</strong> → come back here.
+                  </p>
+                </div>
               )}
             </div>
 
