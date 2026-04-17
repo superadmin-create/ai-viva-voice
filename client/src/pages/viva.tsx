@@ -26,6 +26,9 @@ import {
   Clock,
   GraduationCap,
   Users,
+  Camera,
+  VideoOff,
+  ShieldCheck,
 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -51,7 +54,7 @@ export default function VivaPage() {
   const sessionKey = `viva_${subject}`;
 
   const [step, setStepRaw] = useState<
-    "register" | "preparing" | "exam" | "completed" | "expired"
+    "register" | "permissions" | "preparing" | "exam" | "completed" | "expired"
   >(() => {
     try {
       const saved = sessionStorage.getItem(`${sessionKey}_step`);
@@ -63,6 +66,7 @@ export default function VivaPage() {
     (
       newStep:
         | "register"
+        | "permissions"
         | "preparing"
         | "exam"
         | "completed"
@@ -95,6 +99,10 @@ export default function VivaPage() {
 
   const [isStarting, setIsStarting] = useState(false);
   const [attemptLimitReached, setAttemptLimitReached] = useState(false);
+  const [cameraGranted, setCameraGranted] = useState(false);
+  const [micGranted, setMicGranted] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [micError, setMicError] = useState("");
 
   const [questions, setQuestions] = useState<string[]>(() => {
     try {
@@ -594,6 +602,72 @@ export default function VivaPage() {
     });
   }, []);
 
+  const handleContinueToPermissions = async () => {
+    if (
+      !studentInfo.name ||
+      !studentInfo.email ||
+      !studentInfo.phone ||
+      !studentInfo.rollNumber ||
+      !studentInfo.studentClass ||
+      !studentInfo.division
+    ) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+    setIsStarting(true);
+    setAttemptLimitReached(false);
+    try {
+      const checkRes = await fetch(
+        `/api/viva/check-attempts?email=${encodeURIComponent(studentInfo.email)}&subject=${encodeURIComponent(subject)}`
+      );
+      const checkData = await checkRes.json();
+      if (checkData.limitReached) {
+        setAttemptLimitReached(true);
+        return;
+      }
+      if (subjectInfo?.allowedEmails && subjectInfo.allowedEmails.length > 0) {
+        const allowed = subjectInfo.allowedEmails.map((e) => e.trim().toLowerCase());
+        if (!allowed.includes(studentInfo.email.trim().toLowerCase())) {
+          toast.error("Your email is not authorised to take this exam.");
+          return;
+        }
+      }
+      setCameraGranted(false);
+      setMicGranted(false);
+      setCameraError("");
+      setMicError("");
+      setStep("permissions");
+    } catch (error: any) {
+      toast.error(error.message || "Something went wrong. Please try again.");
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const requestCameraPermission = async () => {
+    setCameraError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach((t) => t.stop());
+      setCameraGranted(true);
+    } catch {
+      setCameraGranted(false);
+      setCameraError("Camera access denied. Please allow camera in your browser settings.");
+    }
+  };
+
+  const requestMicPermission = async () => {
+    setMicError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());
+      setMicGranted(true);
+    } catch {
+      setMicGranted(false);
+      setMicError("Microphone access denied. Please allow microphone in your browser settings.");
+    }
+  };
+
   const startExam = async () => {
     if (
       !studentInfo.name ||
@@ -917,19 +991,160 @@ export default function VivaPage() {
               </div>
             )}
             <Button
-              onClick={startExam}
+              onClick={handleContinueToPermissions}
               className="w-full h-12 text-base bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-50"
               disabled={isStarting || attemptLimitReached}
-              data-testid="button-start-exam"
+              data-testid="button-continue-permissions"
             >
               {isStarting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Starting...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Checking...
                 </>
+              ) : (
+                "Continue"
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+        <audio ref={audioRef} hidden />
+      </div>
+    );
+  }
+
+  if (step === "permissions") {
+    const bothGranted = cameraGranted && micGranted;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center px-4 py-6 sm:p-6">
+        <Card className="w-full max-w-md bg-zinc-800/80 border-zinc-700 shadow-2xl backdrop-blur" data-testid="card-permissions">
+          <CardHeader className="text-center pb-2 px-4 sm:px-6">
+            <img src="/leapup-logo.png" alt="LeapUp" className="h-7 mx-auto mb-3" />
+            <div className="mx-auto w-14 h-14 rounded-full bg-violet-500/20 flex items-center justify-center mb-2">
+              <ShieldCheck className="h-7 w-7 text-violet-400" />
+            </div>
+            <CardTitle className="text-xl sm:text-2xl font-bold text-white">Device Permissions</CardTitle>
+            <p className="text-zinc-400 text-sm mt-1">
+              Allow camera and microphone access to start your viva
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4 px-4 sm:px-6 pb-6">
+            <div className="space-y-3">
+              <div
+                className={`flex items-center justify-between rounded-xl border p-4 transition-colors ${
+                  cameraGranted
+                    ? "border-green-500/50 bg-green-500/10"
+                    : "border-zinc-600 bg-zinc-700/40"
+                }`}
+                data-testid="row-camera-permission"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${cameraGranted ? "bg-green-500/20" : "bg-zinc-600/50"}`}>
+                    {cameraGranted ? (
+                      <Camera className="h-5 w-5 text-green-400" />
+                    ) : (
+                      <VideoOff className="h-5 w-5 text-zinc-400" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-white font-medium text-sm">Camera Access</p>
+                    <p className={`text-xs ${cameraGranted ? "text-green-400" : "text-zinc-400"}`}>
+                      {cameraGranted ? "Access granted" : "Required for exam monitoring"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (!cameraGranted) requestCameraPermission();
+                    else setCameraGranted(false);
+                  }}
+                  data-testid="toggle-camera"
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${
+                    cameraGranted ? "bg-green-500" : "bg-zinc-600"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                      cameraGranted ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+              {cameraError && (
+                <p className="text-xs text-red-400 px-1" data-testid="error-camera">{cameraError}</p>
+              )}
+
+              <div
+                className={`flex items-center justify-between rounded-xl border p-4 transition-colors ${
+                  micGranted
+                    ? "border-green-500/50 bg-green-500/10"
+                    : "border-zinc-600 bg-zinc-700/40"
+                }`}
+                data-testid="row-mic-permission"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${micGranted ? "bg-green-500/20" : "bg-zinc-600/50"}`}>
+                    {micGranted ? (
+                      <Mic className="h-5 w-5 text-green-400" />
+                    ) : (
+                      <MicOff className="h-5 w-5 text-zinc-400" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-white font-medium text-sm">Microphone Access</p>
+                    <p className={`text-xs ${micGranted ? "text-green-400" : "text-zinc-400"}`}>
+                      {micGranted ? "Access granted" : "Required to record your answers"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (!micGranted) requestMicPermission();
+                    else setMicGranted(false);
+                  }}
+                  data-testid="toggle-mic"
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${
+                    micGranted ? "bg-green-500" : "bg-zinc-600"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                      micGranted ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+              {micError && (
+                <p className="text-xs text-red-400 px-1" data-testid="error-mic">{micError}</p>
+              )}
+            </div>
+
+            {!bothGranted && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center">
+                <p className="text-amber-400 text-xs font-medium">
+                  Both camera and microphone must be enabled to proceed
+                </p>
+              </div>
+            )}
+
+            <Button
+              onClick={startExam}
+              disabled={!bothGranted || isStarting}
+              className="w-full h-12 text-base bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
+              data-testid="button-start-exam"
+            >
+              {isStarting ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Starting...</>
               ) : (
                 "Start Viva"
               )}
             </Button>
+
+            <button
+              onClick={() => setStep("register")}
+              className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+              data-testid="button-back-register"
+            >
+              ← Back to registration
+            </button>
           </CardContent>
         </Card>
         <audio ref={audioRef} hidden />
