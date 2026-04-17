@@ -1422,7 +1422,13 @@ export default function VivaPage() {
 
                   {!isListening && !answerRecordedSuccess && (
                     <p className="text-[11px] sm:text-xs text-zinc-500 text-center">
-                      {isTranscribing ? "Processing your answer..." : "Microphone stopped — click Next Question when ready"}
+                      {isSpeaking
+                        ? "🔊 AI is reading your question — please listen carefully..."
+                        : isTranscribing
+                        ? "Processing your answer..."
+                        : hasRecorded
+                        ? "Recording complete — click Next Question when ready"
+                        : "Microphone will start automatically after the question"}
                     </p>
                   )}
 
