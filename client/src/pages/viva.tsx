@@ -129,6 +129,8 @@ export default function VivaPage() {
   const [hasRecorded, setHasRecorded] = useState(false);
 
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [answerRecordedSuccess, setAnswerRecordedSuccess] = useState(false);
+  const [completedQuestions, setCompletedQuestions] = useState<number[]>([]);
 
   useEffect(() => {
     try {
@@ -359,6 +361,8 @@ export default function VivaPage() {
 
       if (questionIndex < allQuestions.length - 1) {
         const nextIndex = questionIndex + 1;
+        setCompletedQuestions((prev) => [...prev, questionIndex]);
+        setAnswerRecordedSuccess(false);
         setCurrentQuestionIndex(nextIndex);
         setCurrentAnswer("");
         setAnswerLocked(false);
@@ -418,6 +422,7 @@ export default function VivaPage() {
         const data = await response.json();
         if (data.text && data.text.trim()) {
           setCurrentAnswer(data.text.trim());
+          setAnswerRecordedSuccess(true);
         }
       }
     } catch (e) {
@@ -1231,167 +1236,213 @@ export default function VivaPage() {
   }
 
   if (step === "exam") {
+    const getQuestionStatus = (idx: number) => {
+      if (completedQuestions.includes(idx)) return "completed";
+      if (idx === currentQuestionIndex) return "current";
+      return "unattempted";
+    };
+
+    const QuestionNav = () => (
+      <div className="bg-zinc-800/80 border border-zinc-700 rounded-xl p-3 shadow-lg">
+        <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3 px-1">
+          Questions
+        </p>
+        <div className="space-y-1.5">
+          {questions.map((_, idx) => {
+            const status = getQuestionStatus(idx);
+            return (
+              <div
+                key={idx}
+                data-testid={`nav-question-${idx}`}
+                className={`flex items-center justify-between rounded-lg px-3 py-2 transition-colors ${
+                  status === "completed"
+                    ? "bg-green-500/10 border border-green-500/30"
+                    : status === "current"
+                    ? "bg-violet-500/15 border border-violet-500/40"
+                    : "bg-zinc-700/30 border border-zinc-700"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                    status === "completed"
+                      ? "bg-green-500 text-white"
+                      : status === "current"
+                      ? "bg-violet-500 text-white"
+                      : "bg-zinc-600 text-zinc-400"
+                  }`}>
+                    {status === "completed" ? "✓" : idx + 1}
+                  </div>
+                  <span className={`text-xs font-medium ${
+                    status === "completed" ? "text-green-400" : status === "current" ? "text-violet-300" : "text-zinc-500"
+                  }`}>
+                    Q{idx + 1}
+                  </span>
+                </div>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                  status === "completed"
+                    ? "bg-green-500/20 text-green-400"
+                    : status === "current"
+                    ? "bg-violet-500/20 text-violet-300"
+                    : "bg-zinc-700 text-zinc-500"
+                }`}>
+                  {status === "completed" ? "Completed" : status === "current" ? "In Progress" : "Unattempted"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 px-3 py-4 sm:p-4">
-        <div className="container mx-auto max-w-3xl">
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 px-3 py-4 sm:p-4 pb-6">
+        <div className="container mx-auto max-w-6xl">
           <div className="mb-3 sm:mb-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm sm:text-base font-semibold text-white">
                 Question {currentQuestionIndex + 1}{" "}
-                <span className="text-zinc-400 font-normal">
-                  of {questions.length}
-                </span>
+                <span className="text-zinc-400 font-normal">of {questions.length}</span>
               </span>
-              <Badge
-                variant="outline"
-                className="text-xs border-zinc-600 text-zinc-400 max-w-[140px] sm:max-w-none truncate"
-              >
+              <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-400 max-w-[140px] sm:max-w-none truncate">
                 {displaySubjectName}
               </Badge>
             </div>
-            <Progress
-              value={((currentQuestionIndex + 1) / questions.length) * 100}
-              className="h-2 bg-zinc-700"
-            />
+            <Progress value={((currentQuestionIndex + 1) / questions.length) * 100} className="h-2 bg-zinc-700" />
           </div>
 
-          <Card
-            className="bg-zinc-800/80 border-zinc-700 shadow-xl backdrop-blur"
-            data-testid="card-question"
-          >
-            <CardHeader className="pb-3 px-4 sm:px-6">
-              <div className="flex items-start gap-2.5 sm:gap-3">
-                <div
-                  className={`p-2 sm:p-2.5 rounded-full shrink-0 ${isSpeaking ? "bg-violet-600 animate-pulse" : "bg-zinc-700"}`}
-                >
-                  <Volume2
-                    className={`h-4 w-4 sm:h-5 sm:w-5 ${isSpeaking ? "text-white" : "text-zinc-400"}`}
-                  />
-                </div>
-                <CardTitle
-                  className="text-base sm:text-lg text-white font-medium leading-relaxed"
-                  data-testid="text-current-question"
-                >
-                  {questions[currentQuestionIndex]}
-                </CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6">
-              <div>
-                <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
-                  <Label className="text-zinc-400 text-xs sm:text-sm"></Label>
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    {silenceCountdown !== null && isListening && (
-                      <Badge className="bg-amber-600/20 text-amber-400 border-amber-600/30 text-[10px] sm:text-xs px-1.5 sm:px-2">
-                        <Clock className="h-3 w-3 mr-0.5 sm:mr-1" />{" "}
-                        {silenceCountdown}s left
-                      </Badge>
-                    )}
-                    {isTranscribing && (
-                      <Badge className="bg-blue-600/20 text-blue-400 border-blue-600/30 animate-pulse text-[10px] sm:text-xs px-1.5 sm:px-2">
-                        <Loader2 className="h-3 w-3 mr-0.5 sm:mr-1 animate-spin" />{" "}
-                        Transcribing...
-                      </Badge>
-                    )}
-                    {isListening && (
-                      <Badge className="bg-red-600/20 text-red-400 border-red-600/30 animate-pulse text-[10px] sm:text-xs px-1.5 sm:px-2">
-                        <Mic className="h-3 w-3 mr-0.5 sm:mr-1" /> Recording
-                      </Badge>
-                    )}
+          <div className="flex flex-col lg:flex-row gap-4 items-start">
+            {/* Main question card */}
+            <div className="flex-1 min-w-0">
+              <Card className="bg-zinc-800/80 border-zinc-700 shadow-xl backdrop-blur" data-testid="card-question">
+                <CardHeader className="pb-3 px-4 sm:px-6">
+                  <div className="flex items-start gap-2.5 sm:gap-3">
+                    <div className={`p-2 sm:p-2.5 rounded-full shrink-0 ${isSpeaking ? "bg-violet-600 animate-pulse" : "bg-zinc-700"}`}>
+                      <Volume2 className={`h-4 w-4 sm:h-5 sm:w-5 ${isSpeaking ? "text-white" : "text-zinc-400"}`} />
+                    </div>
+                    <CardTitle className="text-base sm:text-lg text-white font-medium leading-relaxed" data-testid="text-current-question">
+                      {questions[currentQuestionIndex]}
+                    </CardTitle>
                   </div>
-                </div>
-                {/* Waveform / transcribing visual */}
-                <div
-                  data-testid="waveform-display"
-                  className="flex items-end justify-center gap-[3px] sm:gap-1 h-[100px] sm:h-[120px] bg-zinc-700/50 border border-zinc-600 rounded-md px-4 py-3"
-                >
-                  {isTranscribing ? (
-                    <div className="flex flex-col items-center justify-center gap-4 h-full">
-                      <div className="flex items-center gap-3">
-                        {[0, 1, 2].map((i) => (
-                          <div
-                            key={i}
-                            className="w-3 h-3 bg-blue-400 rounded-full animate-bounce"
-                            style={{ animationDelay: `${i * 0.18}s` }}
-                          />
-                        ))}
+                </CardHeader>
+                <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6">
+                  <div>
+                    <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+                      <Label className="text-zinc-400 text-xs sm:text-sm"></Label>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        {silenceCountdown !== null && isListening && (
+                          <Badge className="bg-amber-600/20 text-amber-400 border-amber-600/30 text-[10px] sm:text-xs px-1.5 sm:px-2">
+                            <Clock className="h-3 w-3 mr-0.5 sm:mr-1" /> {silenceCountdown}s left
+                          </Badge>
+                        )}
+                        {isTranscribing && (
+                          <Badge className="bg-blue-600/20 text-blue-400 border-blue-600/30 animate-pulse text-[10px] sm:text-xs px-1.5 sm:px-2">
+                            <Loader2 className="h-3 w-3 mr-0.5 sm:mr-1 animate-spin" /> Transcribing...
+                          </Badge>
+                        )}
+                        {isListening && (
+                          <Badge className="bg-red-600/20 text-red-400 border-red-600/30 animate-pulse text-[10px] sm:text-xs px-1.5 sm:px-2">
+                            <Mic className="h-3 w-3 mr-0.5 sm:mr-1" /> Recording
+                          </Badge>
+                        )}
                       </div>
-                      <p className="text-blue-400 text-xs font-medium">
-                        Processing your answer...
+                    </div>
+                    {/* Waveform / transcribing visual */}
+                    <div
+                      data-testid="waveform-display"
+                      className="flex items-end justify-center gap-[3px] sm:gap-1 h-[100px] sm:h-[120px] bg-zinc-700/50 border border-zinc-600 rounded-md px-4 py-3"
+                    >
+                      {isTranscribing ? (
+                        <div className="flex flex-col items-center justify-center gap-4 h-full">
+                          <div className="flex items-center gap-3">
+                            {[0, 1, 2].map((i) => (
+                              <div key={i} className="w-3 h-3 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.18}s` }} />
+                            ))}
+                          </div>
+                          <p className="text-blue-400 text-xs font-medium">Processing your answer...</p>
+                        </div>
+                      ) : (
+                        <>
+                          {[20, 32, 48, 36, 56, 44, 64, 44, 56, 36, 48, 32, 20].map((maxH, i) => (
+                            <div
+                              key={i}
+                              className={`w-1.5 sm:w-2 rounded-full ${isListening ? "bg-violet-400 waveform-bar" : "bg-zinc-500 opacity-20"}`}
+                              style={isListening ? { height: `${maxH}px`, animationDuration: `${0.45 + (i % 4) * 0.1}s`, animationDelay: `${i * 0.07}s` } : { height: "4px" }}
+                            />
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Answer recorded success banner */}
+                  {answerRecordedSuccess && !isListening && !isTranscribing && (
+                    <div
+                      className="flex items-start gap-2 rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-2.5"
+                      data-testid="banner-answer-success"
+                    >
+                      <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0 mt-0.5" />
+                      <p className="text-xs text-green-300 leading-relaxed">
+                        <span className="font-semibold">Your answer has been recorded successfully!</span>
+                        {currentQuestionIndex < questions.length - 1
+                          ? " Click the Next button to go to the next question."
+                          : " Click Finish to submit your viva."}
                       </p>
                     </div>
-                  ) : (
-                    <>
-                      {[20, 32, 48, 36, 56, 44, 64, 44, 56, 36, 48, 32, 20].map(
-                        (maxH, i) => (
-                          <div
-                            key={i}
-                            className={`w-1.5 sm:w-2 rounded-full ${
-                              isListening
-                                ? "bg-violet-400 waveform-bar"
-                                : "bg-zinc-500 opacity-20"
-                            }`}
-                            style={
-                              isListening
-                                ? {
-                                    height: `${maxH}px`,
-                                    animationDuration: `${0.45 + (i % 4) * 0.1}s`,
-                                    animationDelay: `${i * 0.07}s`,
-                                  }
-                                : { height: "4px" }
-                            }
-                          />
-                        ),
-                      )}
-                    </>
                   )}
-                </div>
-              </div>
 
-              <div className="flex gap-2">
-                {isListening && (
+                  {/* Stop recording button */}
+                  {isListening && (
+                    <button
+                      onClick={stopListening}
+                      data-testid="button-stop-recording"
+                      className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-red-500/60 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-all py-3 px-4"
+                    >
+                      <MicOff className="h-5 w-5" />
+                      <div className="text-left">
+                        <p className="text-sm font-semibold leading-tight">Stop Recording</p>
+                        <p className="text-[11px] opacity-80 leading-tight">Tap here when you finish speaking your answer</p>
+                      </div>
+                    </button>
+                  )}
+
                   <Button
-                    onClick={stopListening}
-                    variant="outline"
-                    className="h-11 sm:h-10 border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 text-sm shrink-0"
-                    data-testid="button-stop-recording"
+                    onClick={manualSubmitAnswer}
+                    disabled={isSpeaking || isListening || answerLocked || isTranscribing || !hasRecorded}
+                    className="w-full h-11 sm:h-10 bg-violet-600 hover:bg-violet-500 text-white text-sm disabled:opacity-40"
+                    data-testid="button-submit-answer"
                   >
-                    <MicOff className="h-4 w-4 mr-1.5" />
-                    Stop
+                    {answerLocked ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
+                    ) : currentQuestionIndex < questions.length - 1 ? (
+                      "Next Question →"
+                    ) : (
+                      "Finish & Submit"
+                    )}
                   </Button>
-                )}
-                <Button
-                  onClick={manualSubmitAnswer}
-                  disabled={isSpeaking || isListening || answerLocked || isTranscribing || !hasRecorded}
-                  className="w-full h-11 sm:h-10 bg-violet-600 hover:bg-violet-500 text-white text-sm disabled:opacity-40"
-                  data-testid="button-submit-answer"
-                >
-                  {answerLocked ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
-                      Submitting...
-                    </>
-                  ) : currentQuestionIndex < questions.length - 1 ? (
-                    "Next"
-                  ) : (
-                    "Finish"
+
+                  {!isListening && !answerRecordedSuccess && (
+                    <p className="text-[11px] sm:text-xs text-zinc-500 text-center">
+                      {isTranscribing ? "Processing your answer..." : "Microphone stopped — click Next Question when ready"}
+                    </p>
                   )}
-                </Button>
-              </div>
 
-              <p className="text-[11px] sm:text-xs text-zinc-500 text-center">
-                {isListening
-                  ? "Microphone is on — speak your answer clearly"
-                  : isTranscribing
-                    ? "Processing your answer..."
-                    : "Microphone stopped — click Next when ready"}
-              </p>
+                  <p className="text-[10px] text-zinc-600 text-center leading-tight">
+                    <span className="font-medium text-zinc-500">Android tip:</span> If permission is blocked, close any floating chat bubbles or overlay apps, then tap Retry.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
 
-              <p className="text-[10px] text-zinc-600 text-center leading-tight mt-1">
-                <span className="font-medium text-zinc-500">Android tip:</span> If permission is blocked, close any floating chat bubbles or overlay apps, then tap Retry.
-              </p>
-            </CardContent>
-          </Card>
+            {/* Question navigator — right sidebar on desktop */}
+            <div className="hidden lg:block w-56 xl:w-64 flex-shrink-0">
+              <QuestionNav />
+            </div>
+          </div>
+
+          {/* Question navigator — bottom on mobile */}
+          <div className="lg:hidden mt-4">
+            <QuestionNav />
+          </div>
         </div>
         <audio ref={audioRef} hidden />
       </div>
