@@ -166,6 +166,7 @@ export default function VivaPage() {
   const vivaResultIdRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const recordingStartTimeRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const autoListenRef = useRef<boolean>(false);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -404,7 +405,10 @@ export default function VivaPage() {
   }, [clearSilenceTimer]);
 
   const sendAudioForTranscription = useCallback(async (audioBlob: Blob) => {
-    if (audioBlob.size < 1000) return;
+    // Reject audio that is too small (< 15 KB) or recorded for less than 2 seconds
+    // — these are almost always mic-click noise that Whisper hallucinates on
+    const durationMs = recordingStartTimeRef.current ? Date.now() - recordingStartTimeRef.current : 0;
+    if (audioBlob.size < 15000 || durationMs < 2000) return;
     setIsTranscribing(true);
     try {
       const formData = new FormData();
@@ -547,6 +551,7 @@ export default function VivaPage() {
       };
 
       recorder.start();
+      recordingStartTimeRef.current = Date.now();
       setIsListening(true);
       startSilenceTimer();
     } catch (e: any) {

@@ -167,7 +167,24 @@ The evaluations array must be in the same order as the questions provided.`;
   return evaluations;
 }
 
+// Known Whisper hallucinations that appear when audio is silence/noise
+const WHISPER_HALLUCINATIONS = new Set([
+  "you", "you.", "you you", "you you.", "you you you", "you you you.",
+  "thank you", "thank you.", "thank you for watching", "thank you for watching.",
+  "thanks", "thanks.", "thanks for watching", "thanks for watching.",
+  "bye", "bye.", "goodbye", "goodbye.",
+  "ok", "ok.", "okay", "okay.",
+  "yeah", "yeah.", "yep", "yep.", "yes", "yes.",
+  "hmm", "hmm.", "mm-hmm", "mm-hmm.", "uh-huh", "uh-huh.",
+  "um", "um.", "uh", "uh.", "ah", "ah.",
+  ".", "..", "...",
+  "subtitles by", "subtitles by the", "[music]", "[applause]",
+]);
+
 export async function transcribeAudio(audioBuffer: Buffer, mimeType: string = "audio/webm"): Promise<string> {
+  // Reject audio that is too small to contain real speech (< 10 KB)
+  if (audioBuffer.length < 10000) return "";
+
   const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("mp4") ? "mp4" : "webm";
   const file = new File([audioBuffer], `audio.${ext}`, { type: mimeType });
 
@@ -175,9 +192,16 @@ export async function transcribeAudio(audioBuffer: Buffer, mimeType: string = "a
     model: "whisper-1",
     file,
     language: "en",
+    // Prompt steers Whisper toward academic speech and away from hallucinations on silence
+    prompt: "Student answering an oral exam question in English. Spoken academic response:",
   });
 
-  return transcription.text || "";
+  const text = (transcription.text || "").trim();
+
+  // Filter out known Whisper hallucinations (common when audio is near-silence)
+  if (!text || WHISPER_HALLUCINATIONS.has(text.toLowerCase())) return "";
+
+  return text;
 }
 
 export async function textToSpeech(text: string): Promise<Buffer> {
