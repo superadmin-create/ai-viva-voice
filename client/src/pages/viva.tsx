@@ -43,9 +43,11 @@ type SubjectInfo = {
   slug: string;
   modules: { title: string; topics: string[] }[];
   allowedEmails?: string[];
+  subjectType?: string;
 };
 
-const MAX_RECORDING_MS = 45000;
+const MAX_RECORDING_MS_ACADEMIC = 45000;
+const MAX_RECORDING_MS_SALES = 300000; // 5 minutes — effectively unlimited for sales roleplay
 
 export default function VivaPage() {
   const [, params] = useRoute("/:subject");
@@ -384,7 +386,9 @@ export default function VivaPage() {
   const startSilenceTimer = useCallback(() => {
     clearSilenceTimer();
 
-    setSilenceCountdown(MAX_RECORDING_MS / 1000);
+    const maxMs = subjectInfo?.subjectType === "sales" ? MAX_RECORDING_MS_SALES : MAX_RECORDING_MS_ACADEMIC;
+
+    setSilenceCountdown(maxMs / 1000);
     countdownIntervalRef.current = setInterval(() => {
       setSilenceCountdown((prev) => {
         if (prev === null || prev <= 1) return null;
@@ -401,8 +405,8 @@ export default function VivaPage() {
         mediaRecorderRef.current.stop();
       }
       setIsListening(false);
-    }, MAX_RECORDING_MS);
-  }, [clearSilenceTimer]);
+    }, maxMs);
+  }, [clearSilenceTimer, subjectInfo?.subjectType]);
 
   const sendAudioForTranscription = useCallback(async (audioBlob: Blob) => {
     // Reject audio that is too small (< 15 KB) or recorded for less than 2 seconds

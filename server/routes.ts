@@ -231,6 +231,7 @@ export async function registerRoutes(
           modules: custom.curriculum,
           instructions: custom.instructions ?? null,
           allowedEmails: custom.allowedEmails ?? [],
+          subjectType: custom.subjectType ?? "academic",
           isBuiltIn: false 
         });
       }
@@ -624,11 +625,15 @@ export async function registerRoutes(
       if (!email || !email.includes('@')) {
         return res.status(400).json({ error: "Valid email is required" });
       }
-      // Check attempt limit before sending OTP
+      // Check attempt limit before sending OTP (skipped for sales subjects)
       if (subject) {
-        const attempts = await storage.countVivaAttempts(email, subject);
-        if (attempts >= 1) {
-          return res.status(400).json({ error: "You have reached the maximum number of attempts (1) for this subject." });
+        const subjectRecord = await storage.getSubjectBySlug(subject);
+        const isSales = subjectRecord?.subjectType === "sales";
+        if (!isSales) {
+          const attempts = await storage.countVivaAttempts(email, subject);
+          if (attempts >= 1) {
+            return res.status(400).json({ error: "You have reached the maximum number of attempts (1) for this subject." });
+          }
         }
       }
       const result = await sendOTP(email);
@@ -714,6 +719,11 @@ export async function registerRoutes(
     try {
       const { email, subject } = req.query as { email?: string; subject?: string };
       if (!email || !subject) {
+        return res.json({ limitReached: false, count: 0 });
+      }
+      const subjectRecord = await storage.getSubjectBySlug(subject);
+      const isSales = subjectRecord?.subjectType === "sales";
+      if (isSales) {
         return res.json({ limitReached: false, count: 0 });
       }
       const count = await storage.countVivaAttempts(email, subject);
