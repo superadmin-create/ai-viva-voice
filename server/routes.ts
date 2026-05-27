@@ -196,6 +196,10 @@ export async function registerRoutes(
         slug: s.slug,
         isBuiltIn: false,
         isActive: s.isActive,
+        subjectType: s.subjectType ?? "academic",
+        curriculum: s.curriculum,
+        instructions: s.instructions ?? null,
+        allowedEmails: s.allowedEmails ?? [],
         ...(isAuthenticated ? { createdBy: s.createdBy } : {}),
       }));
       
@@ -241,8 +245,13 @@ export async function registerRoutes(
   // Create a new custom subject (any authenticated user)
   app.post("/api/admin/subjects", requireAuth, async (req, res) => {
     try {
+      const allowedTypes = ["academic", "sales"];
+      if (req.body.subjectType && !allowedTypes.includes(req.body.subjectType)) {
+        return res.status(400).json({ error: "Invalid subjectType. Must be 'academic' or 'sales'." });
+      }
       const validatedData = insertSubjectSchema.parse({
         ...req.body,
+        subjectType: allowedTypes.includes(req.body.subjectType) ? req.body.subjectType : "academic",
         createdBy: req.session.userId,
       });
       const subject = await storage.createSubject(validatedData);
@@ -262,6 +271,10 @@ export async function registerRoutes(
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid ID" });
+      }
+      const allowedTypes = ["academic", "sales"];
+      if (req.body.subjectType && !allowedTypes.includes(req.body.subjectType)) {
+        return res.status(400).json({ error: "Invalid subjectType. Must be 'academic' or 'sales'." });
       }
       const currentUser = await storage.getUser(req.session.userId!);
       if (currentUser?.role !== "admin") {
