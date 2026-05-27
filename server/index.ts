@@ -89,6 +89,7 @@ app.use((req, res, next) => {
       ALTER TABLE viva_results ADD COLUMN IF NOT EXISTS student_roll_number text NOT NULL DEFAULT '';
       ALTER TABLE subjects ADD COLUMN IF NOT EXISTS allowed_emails text[];
       ALTER TABLE subjects ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
+      ALTER TABLE subjects ADD COLUMN IF NOT EXISTS subject_type text NOT NULL DEFAULT 'academic';
     `);
     client.release();
     console.log("Database schema up to date");

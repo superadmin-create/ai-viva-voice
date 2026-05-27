@@ -62,6 +62,7 @@ export const subjects = pgTable("subjects", {
   instructions: text("instructions"),
   allowedEmails: text("allowed_emails").array(),
   isActive: boolean("is_active").notNull().default(true),
+  subjectType: text("subject_type").notNull().default("academic"),
   createdBy: varchar("created_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

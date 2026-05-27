@@ -856,6 +856,7 @@ export async function registerRoutes(
             answer: ra.answer,
             feedback: evaluations[i]?.feedback || "Evaluation failed",
             score: evaluations[i]?.score || 0,
+            ...(evaluations[i]?.dimensionScores ? { dimensionScores: evaluations[i].dimensionScores } : {}),
           }));
 
           const totalScore = evaluatedTranscript.reduce((sum, t) => sum + t.score, 0);

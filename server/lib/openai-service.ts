@@ -12,6 +12,20 @@ export type QuestionGenerationResult = {
   }>;
 };
 
+export type DimensionScores = {
+  contentAccuracy: number;
+  confidence: number;
+  clarity: number;
+  salesEffectiveness: number;
+};
+
+export type AnswerEvaluation = {
+  score: number;
+  feedback: string;
+  isCorrect: boolean;
+  dimensionScores?: DimensionScores;
+};
+
 async function getDocumentContext(subjectSlug: string): Promise<string> {
   const docs = await storage.getDocumentsBySubject(subjectSlug);
   if (docs.length === 0) return "";
@@ -23,25 +37,43 @@ export async function generateVivaQuestions(subjectSlug: string, count: number =
   const subjectContent = getSubjectContent(subjectSlug);
   const documentContext = await getDocumentContext(subjectSlug);
   const subjectRecord = await storage.getSubjectBySlug(subjectSlug);
-  
+  const isSales = subjectRecord?.subjectType === "sales";
+
   let prompt: string;
-  
-  if (subjectContent) {
-    const topics = subjectContent.modules.flatMap(m => m.topics).slice(0, 10).join(", ");
-    prompt = `Generate ${count} short oral exam questions for "${subjectContent.name}". Topics: ${topics}.`;
+
+  if (isSales) {
+    const context = documentContext
+      ? `Use the following sales training material to make your questions highly specific and relevant:\n\n${documentContext}\n\n`
+      : "";
+    prompt = `${context}You are a skeptical but realistic B2B/B2C prospect being approached by a sales rep for the subject: "${subjectRecord?.name || subjectSlug}".
+
+Generate ${count} roleplay-style sales conversation questions that a prospect would naturally ask or that test key sales skills. Focus on objection handling, product knowledge, value proposition, and closing. Each question should feel like something a real prospect would say or challenge the salesperson with.
+
+Examples of the style:
+- "Why should I choose your product over the competition?"
+- "What's the ROI if I invest in this?"
+- "I've heard mixed reviews — can you convince me?"
+- "We already have a solution. Why switch?"
+
+Return JSON: {"questions":["q1","q2",...]}`;
   } else {
-    prompt = `Generate ${count} short oral exam questions for "${subjectSlug}".`;
-  }
+    if (subjectContent) {
+      const topics = subjectContent.modules.flatMap(m => m.topics).slice(0, 10).join(", ");
+      prompt = `Generate ${count} short oral exam questions for "${subjectContent.name}". Topics: ${topics}.`;
+    } else {
+      prompt = `Generate ${count} short oral exam questions for "${subjectSlug}".`;
+    }
 
-  if (documentContext) {
-    prompt += `\n\nAlso use the following reference material from uploaded documents to form relevant questions:\n\n${documentContext}`;
-  }
+    if (documentContext) {
+      prompt += `\n\nAlso use the following reference material from uploaded documents to form relevant questions:\n\n${documentContext}`;
+    }
 
-  if (subjectRecord?.instructions?.trim()) {
-    prompt += `\n\nSpecial exam instructions from the examiner (follow these strictly when generating questions):\n${subjectRecord.instructions.trim()}`;
-  }
+    if (subjectRecord?.instructions?.trim()) {
+      prompt += `\n\nSpecial exam instructions from the examiner (follow these strictly when generating questions):\n${subjectRecord.instructions.trim()}`;
+    }
 
-  prompt += `\n\nReturn JSON: {"questions":["q1","q2",...]}`;
+    prompt += `\n\nReturn JSON: {"questions":["q1","q2",...]}`;
+  }
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -53,12 +85,6 @@ export async function generateVivaQuestions(subjectSlug: string, count: number =
   const result = JSON.parse(response.choices[0].message.content || "{}");
   return result.questions || [];
 }
-
-export type AnswerEvaluation = {
-  score: number;
-  feedback: string;
-  isCorrect: boolean;
-};
 
 export async function evaluateAnswer(
   question: string,
@@ -118,6 +144,11 @@ export async function evaluateAnswersBatch(
   const subjectName = subjectContent?.name || subjectSlug;
   const documentContext = await getDocumentContext(subjectSlug);
   const subjectRecord = await storage.getSubjectBySlug(subjectSlug);
+  const isSales = subjectRecord?.subjectType === "sales";
+
+  if (isSales) {
+    return evaluateSalesAnswersBatch(answers, subjectName, documentContext, subjectRecord?.instructions);
+  }
 
   let systemPrompt = `You are an expert examiner evaluating student responses in ${subjectName}.`;
 
@@ -158,6 +189,80 @@ The evaluations array must be in the same order as the questions provided.`;
     score: e.score || 0,
     feedback: e.feedback || "No feedback available",
     isCorrect: e.isCorrect || false,
+  }));
+
+  while (evaluations.length < answers.length) {
+    evaluations.push({ score: 0, feedback: "Evaluation failed", isCorrect: false });
+  }
+
+  return evaluations;
+}
+
+async function evaluateSalesAnswersBatch(
+  answers: Array<{ question: string; answer: string }>,
+  subjectName: string,
+  documentContext: string,
+  instructions?: string | null
+): Promise<AnswerEvaluation[]> {
+  let systemPrompt = `You are an expert sales coach evaluating a sales representative's performance during a mock sales roleplay for "${subjectName}".
+
+You will evaluate each response across 4 dimensions, each scored 0–10:
+1. **Content Accuracy** — Is the information factually correct, relevant, and well-informed about the product/service?
+2. **Confidence** — Does the response sound assured, not hesitant or vague?
+3. **Clarity** — Is the answer clear, concise, and easy for a prospect to understand?
+4. **Sales Effectiveness** — Does the answer address the prospect's concern, overcome objections, and move the sale forward?
+
+The overall score (0–10) should be the average of the four dimension scores, rounded to the nearest integer.`;
+
+  if (documentContext) {
+    systemPrompt += `\n\nReference Material from Uploaded Training Documents:\n${documentContext}`;
+  }
+
+  if (instructions?.trim()) {
+    systemPrompt += `\n\nAdditional evaluation instructions:\n${instructions.trim()}`;
+  }
+
+  systemPrompt += `\n\nRespond in JSON format:
+{
+  "evaluations": [
+    {
+      "score": number,
+      "feedback": string,
+      "isCorrect": boolean,
+      "dimensionScores": {
+        "contentAccuracy": number,
+        "confidence": number,
+        "clarity": number,
+        "salesEffectiveness": number
+      }
+    },
+    ...
+  ]
+}
+The evaluations array must be in the same order as the questions provided.`;
+
+  const qaList = answers.map((a, i) => `--- Response ${i + 1} ---\nProspect: ${a.question}\nSales Rep: ${a.answer}`).join("\n\n");
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-5",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: `Evaluate all of the following sales roleplay responses:\n\n${qaList}` }
+    ],
+    response_format: { type: "json_object" }
+  });
+
+  const result = JSON.parse(response.choices[0].message.content || "{}");
+  const evaluations: AnswerEvaluation[] = (result.evaluations || []).map((e: any) => ({
+    score: e.score || 0,
+    feedback: e.feedback || "No feedback available",
+    isCorrect: e.isCorrect || false,
+    dimensionScores: e.dimensionScores ? {
+      contentAccuracy: e.dimensionScores.contentAccuracy || 0,
+      confidence: e.dimensionScores.confidence || 0,
+      clarity: e.dimensionScores.clarity || 0,
+      salesEffectiveness: e.dimensionScores.salesEffectiveness || 0,
+    } : undefined,
   }));
 
   while (evaluations.length < answers.length) {

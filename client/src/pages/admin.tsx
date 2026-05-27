@@ -13,6 +13,13 @@ import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
+type DimensionScores = {
+  contentAccuracy: number;
+  confidence: number;
+  clarity: number;
+  salesEffectiveness: number;
+};
+
 type VivaResult = {
   id: number;
   studentName: string;
@@ -29,6 +36,7 @@ type VivaResult = {
     answer: string;
     feedback: string;
     score: number;
+    dimensionScores?: DimensionScores;
   }>;
   timestamp: string;
   status: string;
@@ -41,6 +49,11 @@ type Subject = {
   name: string;
   slug: string;
   isBuiltIn: boolean;
+  subjectType?: string;
+  curriculum?: any;
+  instructions?: string | null;
+  allowedEmails?: string[] | null;
+  isActive?: boolean;
   createdBy?: string | null;
 };
 
@@ -70,9 +83,9 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [showUserDialog, setShowUserDialog] = useState(false);
   const [showResetPasswordDialog, setShowResetPasswordDialog] = useState<string | null>(null);
   const [selectedSubjectSlug, setSelectedSubjectSlug] = useState<string | null>(null);
-  const [newSubject, setNewSubject] = useState({ name: "", curriculum: "", instructions: "", allowedEmails: "" });
+  const [newSubject, setNewSubject] = useState({ name: "", curriculum: "", instructions: "", allowedEmails: "", subjectType: "academic" });
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
-  const [editSubjectData, setEditSubjectData] = useState({ name: "", curriculum: "", instructions: "", allowedEmails: "" });
+  const [editSubjectData, setEditSubjectData] = useState({ name: "", curriculum: "", instructions: "", allowedEmails: "", subjectType: "academic" });
   const [newQuestion, setNewQuestion] = useState("");
   const [newUser, setNewUser] = useState({ username: "", password: "", role: "admin" });
   const [resetPassword, setResetPassword] = useState("");
@@ -187,7 +200,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       queryClient.invalidateQueries({ queryKey: ["subjects"] });
       toast.success("Subject created successfully!");
       setShowSubjectDialog(false);
-      setNewSubject({ name: "", curriculum: "", instructions: "", allowedEmails: "" });
+      setNewSubject({ name: "", curriculum: "", instructions: "", allowedEmails: "", subjectType: "academic" });
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -421,6 +434,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       curriculum: curriculumToText(subject.curriculum as { title: string; topics: string[] }[]),
       instructions: subject.instructions ?? "",
       allowedEmails: (subject.allowedEmails as string[] | null ?? []).join('\n'),
+      subjectType: subject.subjectType ?? "academic",
     });
   };
 
@@ -458,6 +472,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
         curriculum,
         instructions: editSubjectData.instructions.trim() || null,
         allowedEmails: parsedEmails.length > 0 ? parsedEmails : [],
+        subjectType: editSubjectData.subjectType,
       },
     });
   };
@@ -519,6 +534,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       name: newSubject.name,
       slug: autoSlug,
       curriculum,
+      subjectType: newSubject.subjectType,
       ...(newSubject.instructions.trim() ? { instructions: newSubject.instructions.trim() } : {}),
       ...(parsedEmails.length > 0 ? { allowedEmails: parsedEmails } : {}),
     });
@@ -1522,20 +1538,48 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                     <Card key={index}>
                       <CardContent className="pt-6 space-y-3">
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">Question {index + 1}</p>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            {item.dimensionScores ? `Prospect Challenge ${index + 1}` : `Question ${index + 1}`}
+                          </p>
                           <p className="font-medium">{item.question}</p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">Student Answer</p>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            {item.dimensionScores ? "Sales Rep Response" : "Student Answer"}
+                          </p>
                           <p>{item.answer}</p>
                         </div>
                         <div>
                           <p className="text-sm font-medium text-muted-foreground">Feedback</p>
                           <p className="text-sm">{item.feedback}</p>
                         </div>
-                        <Badge variant={item.score >= 7 ? "default" : item.score >= 5 ? "secondary" : "destructive"}>
-                          Score: {item.score}/10
-                        </Badge>
+                        {item.dimensionScores ? (
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium text-muted-foreground">Dimension Scores</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                { label: "Content Accuracy", value: item.dimensionScores.contentAccuracy },
+                                { label: "Confidence", value: item.dimensionScores.confidence },
+                                { label: "Clarity", value: item.dimensionScores.clarity },
+                                { label: "Sales Effectiveness", value: item.dimensionScores.salesEffectiveness },
+                              ].map(({ label, value }) => (
+                                <div key={label} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                                  <span className="text-muted-foreground">{label}</span>
+                                  <Badge variant={value >= 7 ? "default" : value >= 5 ? "secondary" : "destructive"}>
+                                    {value}/10
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                            <Badge variant={item.score >= 7 ? "default" : item.score >= 5 ? "secondary" : "destructive"}>
+                              Overall: {item.score}/10
+                            </Badge>
+                          </div>
+                        ) : (
+                          <Badge variant={item.score >= 7 ? "default" : item.score >= 5 ? "secondary" : "destructive"}>
+                            Score: {item.score}/10
+                          </Badge>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
@@ -1567,6 +1611,21 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                   Students will access via /{newSubject.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'slug'}
                 </p>
               )}
+            </div>
+            <div>
+              <Label>Subject Type</Label>
+              <select
+                value={newSubject.subjectType}
+                onChange={(e) => setNewSubject({ ...newSubject, subjectType: e.target.value })}
+                className="w-full mt-1 px-3 py-2 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                data-testid="select-subject-type"
+              >
+                <option value="academic">Academic — standard oral exam with Q&amp;A scoring</option>
+                <option value="sales">Sales — prospect roleplay with 4-dimension evaluation</option>
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Sales mode uses a roleplay format where AI acts as a skeptical prospect and scores Content Accuracy, Confidence, Clarity, and Sales Effectiveness.
+              </p>
             </div>
             <div>
               <Label>Curriculum Topics</Label>
@@ -1645,6 +1704,18 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                 onChange={(e) => setEditSubjectData({ ...editSubjectData, name: e.target.value })}
                 data-testid="input-edit-subject-name"
               />
+            </div>
+            <div>
+              <Label>Subject Type</Label>
+              <select
+                value={editSubjectData.subjectType}
+                onChange={(e) => setEditSubjectData({ ...editSubjectData, subjectType: e.target.value })}
+                className="w-full mt-1 px-3 py-2 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                data-testid="select-edit-subject-type"
+              >
+                <option value="academic">Academic — standard oral exam with Q&amp;A scoring</option>
+                <option value="sales">Sales — prospect roleplay with 4-dimension evaluation</option>
+              </select>
             </div>
             <div>
               <Label>Curriculum Topics</Label>
