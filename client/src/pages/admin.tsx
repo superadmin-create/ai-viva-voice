@@ -187,7 +187,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
   });
 
   const createSubjectMutation = useMutation({
-    mutationFn: async (data: { name: string; slug: string; curriculum: any[] }) => {
+    mutationFn: async (data: { name: string; slug: string; curriculum: any[]; subjectType?: string; instructions?: string; allowedEmails?: string[] }) => {
       const response = await fetch("/api/admin/subjects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1592,92 +1592,93 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
 
       {/* Add Subject Dialog */}
       <Dialog open={showSubjectDialog} onOpenChange={setShowSubjectDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Subject</DialogTitle>
             <DialogDescription>Create a new examination subject with curriculum content</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Subject Name</Label>
-              <Input
-                placeholder="e.g., Introduction to Python"
-                value={newSubject.name}
-                onChange={(e) => setNewSubject({ ...newSubject, name: e.target.value })}
-                data-testid="input-subject-name"
-              />
-              {newSubject.name && (
+          <div className="grid grid-cols-2 gap-6">
+            {/* Left column */}
+            <div className="space-y-4">
+              <div>
+                <Label>Subject Name</Label>
+                <Input
+                  placeholder="e.g., Introduction to Python"
+                  value={newSubject.name}
+                  onChange={(e) => setNewSubject({ ...newSubject, name: e.target.value })}
+                  data-testid="input-subject-name"
+                  className="mt-1"
+                />
+                {newSubject.name && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    URL: /{newSubject.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'slug'}
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label>Subject Type</Label>
+                <select
+                  value={newSubject.subjectType}
+                  onChange={(e) => setNewSubject({ ...newSubject, subjectType: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  data-testid="select-subject-type"
+                >
+                  <option value="academic">Academic — Q&amp;A scoring</option>
+                  <option value="sales">Sales — prospect roleplay</option>
+                </select>
+                {newSubject.subjectType === "sales" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    AI acts as a skeptical prospect. Scores: Content Accuracy, Confidence, Clarity, Sales Effectiveness.
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label>
+                  Exam Instructions <span className="text-muted-foreground font-normal">(Optional)</span>
+                </Label>
+                <Textarea
+                  placeholder={"Focus only on practical application questions.\nScore strictly — penalise vague or one-word answers.\nAlways include one question on error handling."}
+                  value={newSubject.instructions}
+                  onChange={(e) => setNewSubject({ ...newSubject, instructions: e.target.value })}
+                  className="min-h-[100px] text-sm mt-1"
+                  data-testid="input-exam-instructions"
+                />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Students will access via /{newSubject.name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'slug'}
+                  Passed directly to the AI to control question generation and evaluation.
                 </p>
-              )}
-            </div>
-            <div>
-              <Label>Subject Type</Label>
-              <select
-                value={newSubject.subjectType}
-                onChange={(e) => setNewSubject({ ...newSubject, subjectType: e.target.value })}
-                className="w-full mt-1 px-3 py-2 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                data-testid="select-subject-type"
-              >
-                <option value="academic">Academic — standard oral exam with Q&amp;A scoring</option>
-                <option value="sales">Sales — prospect roleplay with 4-dimension evaluation</option>
-              </select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Sales mode uses a roleplay format where AI acts as a skeptical prospect and scores Content Accuracy, Confidence, Clarity, and Sales Effectiveness.
-              </p>
-            </div>
-            <div>
-              <Label>Curriculum Topics</Label>
-              <Textarea
-                placeholder={"e.g.:\n\nData Types:\n- Variables and constants\n- Strings and numbers\n- Lists and dictionaries\n\nControl Flow:\n- If/else statements\n- For and while loops"}
-                value={newSubject.curriculum}
-                onChange={(e) => setNewSubject({ ...newSubject, curriculum: e.target.value })}
-                className="min-h-[150px] text-sm"
-                data-testid="input-curriculum"
-              />
-              <p className="text-xs text-muted-foreground mt-2">
-                List topics line by line. Use a heading ending with <strong>:</strong> to group into modules. Leave empty for default.
-              </p>
-              <div className="mt-2 p-3 bg-muted/50 rounded-lg">
-                <p className="text-xs font-medium mb-1">Example:</p>
-                <pre className="text-xs text-muted-foreground whitespace-pre-wrap">{'Module 1: Basics:\nVariables and data types\nInput and output\n\nModule 2: Control Flow:\nIf/else statements\nLoops and iteration'}</pre>
+              </div>
+              <div>
+                <Label>
+                  Allowed Emails <span className="text-muted-foreground font-normal">(Optional)</span>
+                </Label>
+                <Textarea
+                  placeholder={"student1@example.com\nstudent2@example.com\nstudent3@example.com"}
+                  value={newSubject.allowedEmails}
+                  onChange={(e) => setNewSubject({ ...newSubject, allowedEmails: e.target.value })}
+                  className="min-h-[100px] text-sm mt-1"
+                  data-testid="input-allowed-emails"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  One per line. Leave blank to allow anyone.
+                </p>
               </div>
             </div>
-            <div>
-              <Label>
-                Exam Instructions{" "}
-                <span className="text-muted-foreground font-normal">(Optional)</span>
-              </Label>
+            {/* Right column — Curriculum */}
+            <div className="flex flex-col">
+              <Label>Curriculum Topics</Label>
               <Textarea
-                placeholder={"e.g.:\nFocus only on practical application questions.\nScore strictly — penalise vague or one-word answers.\nAlways include one question on error handling."}
-                value={newSubject.instructions}
-                onChange={(e) => setNewSubject({ ...newSubject, instructions: e.target.value })}
-                className="min-h-[100px] text-sm"
-                data-testid="input-exam-instructions"
+                placeholder={"Module 1: Basics:\nVariables and data types\nInput and output\n\nModule 2: Control Flow:\nIf/else statements\nLoops and iteration"}
+                value={newSubject.curriculum}
+                onChange={(e) => setNewSubject({ ...newSubject, curriculum: e.target.value })}
+                className="flex-1 min-h-[340px] text-sm mt-1 resize-none"
+                data-testid="input-curriculum"
               />
-              <p className="text-xs text-muted-foreground mt-2">
-                These instructions are passed directly to the AI to control how it generates questions and evaluates answers for this subject.
-              </p>
-            </div>
-            <div>
-              <Label>
-                Allowed Emails{" "}
-                <span className="text-muted-foreground font-normal">(Optional — leave blank to allow all)</span>
-              </Label>
-              <Textarea
-                placeholder={"student1@example.com\nstudent2@example.com\nstudent3@example.com"}
-                value={newSubject.allowedEmails}
-                onChange={(e) => setNewSubject({ ...newSubject, allowedEmails: e.target.value })}
-                className="min-h-[100px] text-sm"
-                data-testid="input-allowed-emails"
-              />
-              <p className="text-xs text-muted-foreground mt-2">
-                Enter one email per line (or comma-separated). Only these students will be able to start this exam. Leave blank to allow anyone.
+              <p className="text-xs text-muted-foreground mt-1">
+                Use a heading ending with <strong>:</strong> to group topics into modules. Leave empty to use a default.
               </p>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-2">
             <Button variant="outline" onClick={() => setShowSubjectDialog(false)}>Cancel</Button>
             <Button onClick={handleCreateSubject} disabled={!newSubject.name.trim()}>
               Create Subject
@@ -1688,79 +1689,90 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
 
       {/* Edit Subject Dialog */}
       <Dialog open={!!editingSubject} onOpenChange={(open) => { if (!open) setEditingSubject(null); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Subject</DialogTitle>
             <DialogDescription>
               Update the subject details. The URL slug (<strong>/{editingSubject?.slug}</strong>) cannot be changed.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Subject Name</Label>
-              <Input
-                placeholder="e.g., Introduction to Python"
-                value={editSubjectData.name}
-                onChange={(e) => setEditSubjectData({ ...editSubjectData, name: e.target.value })}
-                data-testid="input-edit-subject-name"
-              />
+          <div className="grid grid-cols-2 gap-6">
+            {/* Left column */}
+            <div className="space-y-4">
+              <div>
+                <Label>Subject Name</Label>
+                <Input
+                  placeholder="e.g., Introduction to Python"
+                  value={editSubjectData.name}
+                  onChange={(e) => setEditSubjectData({ ...editSubjectData, name: e.target.value })}
+                  data-testid="input-edit-subject-name"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Subject Type</Label>
+                <select
+                  value={editSubjectData.subjectType}
+                  onChange={(e) => setEditSubjectData({ ...editSubjectData, subjectType: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  data-testid="select-edit-subject-type"
+                >
+                  <option value="academic">Academic — Q&amp;A scoring</option>
+                  <option value="sales">Sales — prospect roleplay</option>
+                </select>
+                {editSubjectData.subjectType === "sales" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    AI acts as a skeptical prospect. Scores: Content Accuracy, Confidence, Clarity, Sales Effectiveness.
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label>
+                  Exam Instructions <span className="text-muted-foreground font-normal">(Optional)</span>
+                </Label>
+                <Textarea
+                  placeholder={"Focus only on practical application questions.\nScore strictly — penalise vague or one-word answers."}
+                  value={editSubjectData.instructions}
+                  onChange={(e) => setEditSubjectData({ ...editSubjectData, instructions: e.target.value })}
+                  className="min-h-[100px] text-sm mt-1"
+                  data-testid="input-edit-instructions"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Passed directly to the AI to control question generation and evaluation.
+                </p>
+              </div>
+              <div>
+                <Label>
+                  Allowed Emails <span className="text-muted-foreground font-normal">(Optional)</span>
+                </Label>
+                <Textarea
+                  placeholder={"student1@example.com\nstudent2@example.com"}
+                  value={editSubjectData.allowedEmails}
+                  onChange={(e) => setEditSubjectData({ ...editSubjectData, allowedEmails: e.target.value })}
+                  className="min-h-[100px] text-sm mt-1"
+                  data-testid="input-edit-allowed-emails"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  One per line. Leave blank to allow anyone.
+                </p>
+              </div>
             </div>
-            <div>
-              <Label>Subject Type</Label>
-              <select
-                value={editSubjectData.subjectType}
-                onChange={(e) => setEditSubjectData({ ...editSubjectData, subjectType: e.target.value })}
-                className="w-full mt-1 px-3 py-2 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                data-testid="select-edit-subject-type"
-              >
-                <option value="academic">Academic — standard oral exam with Q&amp;A scoring</option>
-                <option value="sales">Sales — prospect roleplay with 4-dimension evaluation</option>
-              </select>
-            </div>
-            <div>
+            {/* Right column — Curriculum */}
+            <div className="flex flex-col">
               <Label>Curriculum Topics</Label>
               <Textarea
-                placeholder={"e.g.:\n\nData Types:\n- Variables and constants\n- Strings and numbers\n\nControl Flow:\n- If/else statements\n- For and while loops"}
+                placeholder={"Module 1: Basics:\nVariables and data types\nInput and output\n\nModule 2: Control Flow:\nIf/else statements\nLoops and iteration"}
                 value={editSubjectData.curriculum}
                 onChange={(e) => setEditSubjectData({ ...editSubjectData, curriculum: e.target.value })}
-                className="min-h-[160px] text-sm"
+                className="flex-1 min-h-[340px] text-sm mt-1 resize-none"
                 data-testid="input-edit-curriculum"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Use a heading ending with <strong>:</strong> to group into modules. Topics go on lines below it.
-              </p>
-            </div>
-            <div>
-              <Label>
-                Exam Instructions{" "}
-                <span className="text-muted-foreground font-normal">(Optional)</span>
-              </Label>
-              <Textarea
-                placeholder={"e.g.:\nFocus only on practical application questions.\nScore strictly — penalise vague or one-word answers."}
-                value={editSubjectData.instructions}
-                onChange={(e) => setEditSubjectData({ ...editSubjectData, instructions: e.target.value })}
-                className="min-h-[100px] text-sm"
-                data-testid="input-edit-instructions"
-              />
-            </div>
-            <div>
-              <Label>
-                Allowed Emails{" "}
-                <span className="text-muted-foreground font-normal">(Optional — leave blank to allow all)</span>
-              </Label>
-              <Textarea
-                placeholder={"student1@example.com\nstudent2@example.com"}
-                value={editSubjectData.allowedEmails}
-                onChange={(e) => setEditSubjectData({ ...editSubjectData, allowedEmails: e.target.value })}
-                className="min-h-[80px] text-sm"
-                data-testid="input-edit-allowed-emails"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                One email per line or comma-separated. Leave blank to allow anyone.
+                Use a heading ending with <strong>:</strong> to group topics into modules.
               </p>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-2">
             <Button variant="outline" onClick={() => setEditingSubject(null)}>Cancel</Button>
             <Button
               onClick={handleUpdateSubject}
